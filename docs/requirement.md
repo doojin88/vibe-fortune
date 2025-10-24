@@ -55,7 +55,17 @@ Clerk, Supabase, 토스페이먼츠를 연동한 구독형 사주 분석 서비�
 - Supabase `users` 테이블에 사용자 정보 동기화
 - Webhook은 배포 환경에서만 작동 (로컬 테스트 시 ngrok 필요)
 
-**필수 패키지**: `@clerk/nextjs@latest`, `svix`
+#### 4.1.3 **필수 패키지**
+
+- `@clerk/nextjs@latest`, `svix`
+
+#### 4.1.4 주요 구현 사항
+- `clerkMiddleware()` 사용 (구버전 `authMiddleware()` 사용 금지)
+- 서버/클라이언트 import 경로 구분 필수
+  - 서버 컴포넌트: `@clerk/nextjs/server`
+  - 클라이언트 컴포넌트: `@clerk/nextjs`
+- App Router 전용 (`app/` 디렉토리)
+- 상세 구현 가이드: [clerk-auth.md](./external/clerk-auth.md)
 
 ---
 
@@ -159,7 +169,7 @@ TOSS_SECRET_KEY=test_sk_...
 GEMINI_API_KEY=AIza...
 
 # Supabase Cron 요청 보안
-SUPABASE_CRON_REQUEST_SECRET=your-strong-random-secret
+CRON_REQUEST_SECRET=your-strong-random-secret
 ```
 
 ---
@@ -192,7 +202,7 @@ SUPABASE_CRON_REQUEST_SECRET=your-strong-random-secret
 
 ### 7.4 자동 결제
 - [ ] Supabase Cron으로 매일 02:00 API 호출
-- [ ] SUPABASE_CRON_REQUEST_SECRET으로 요청 검증
+- [ ] CRON_REQUEST_SECRET으로 요청 검증
 - [ ] 결제일 도래 구독 건 자동 탐색
 - [ ] 결제 성공 시 테스트 횟수 +10, 구독 기간 연장
 - [ ] 결제 실패 시 즉시 해지 및 빌링키 삭제
@@ -211,7 +221,7 @@ SUPABASE_CRON_REQUEST_SECRET=your-strong-random-secret
 
 ### 8.3 보안
 - 서버 전용 키는 클라이언트 노출 금지
-- Supabase Cron API 엔드포인트에 SUPABASE_CRON_REQUEST_SECRET 를 이용한 인증 필수
+- Supabase Cron API 엔드포인트에 CRON_REQUEST_SECRET 를 이용한 인증 필수
 - Webhook 서명 검증 필수
 
 ---
