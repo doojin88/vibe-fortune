@@ -29,15 +29,197 @@ Clerk, Supabase, 토스페이먼츠를 연동한 구독형 사주 분석 서비�
 
 ### 3.1 사용자 인증 (Clerk)
 
-#### 3.1.1 Google 로그인
-- Clerk SDK 기본 컴포넌트 사용
-- 회원가입, 로그인, 로그아웃 페이지 제공
-- Google OAuth 연동
+#### 3.1.0 Clerk SDK 설정
+**필수 패키지**:
+```bash
+npm install @clerk/nextjs@latest
+```
 
-#### 3.1.2 Clerk Webhook
-- 사용자 생성/업데이트/삭제 이벤트 수신
-- Supabase `users` 테이블에 사용자 정보 동기화
-- Webhook은 배포 환경에서만 작동
+**주요 문서**:
+- [Clerk Next.js Quickstart](https://clerk.com/docs/quickstarts/nextjs)
+- [Google OAuth 연동 가이드](https://clerk.com/blog/raw/nextjs-google-authentication)
+
+#### 3.1.1 Clerk 미들웨어 설정
+**파일**: `middleware.ts` (프로젝트 루트 또는 `src/` 디렉토리)
+
+```typescript
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware();
+
+export const config = {
+  matcher: [
+    // Next.js 내부 파일과 정적 파일 제외
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // API 라우트는 항상 실행
+    '/(api|trpc)(.*)',
+  ],
+};
+```
+
+**중요 사항**:
+- ❌ **사용 금지**: `authMiddleware()` (구버전, 더 이상 사용 안 함)
+- ✅ **사용**: `clerkMiddleware()` (현재 버전)
+
+#### 3.1.2 ClerkProvider 래퍼 설정
+**파일**: `app/layout.tsx`
+
+```typescript
+import { ClerkProvider } from '@clerk/nextjs';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ClerkProvider>
+      <html lang="ko">
+        <body>{children}</body>
+      </html>
+    </ClerkProvider>
+  );
+}
+```
+
+#### 3.1.3 Google 로그인 UI 구현
+Clerk SDK 기본 컴포넌트 사용:
+
+```typescript
+import {
+  SignInButton,
+  SignUpButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from '@clerk/nextjs';
+
+export default function Header() {
+  return (
+    <header>
+      <SignedOut>
+        <SignInButton mode="modal" />
+        <SignUpButton mode="modal" />
+      </SignedOut>
+      <SignedIn>
+        <UserButton afterSignOutUrl="/" />
+      </SignedIn>
+    </header>
+  );
+}
+```
+
+**Clerk Dashboard 설정**:
+1. [Clerk Dashboard](https://dashboard.clerk.com/) 로그인
+2. Application 선택 > **User & Authentication** > **Social Connections**
+3. **Google** 활성화
+4. 자동 생성된 키 사용 또는 커스텀 OAuth 앱 연결
+
+#### 3.1.4 서버에서 사용자 정보 접근
+```typescript
+import { auth, currentUser } from '@clerk/nextjs/server';
+
+// 방법 1: auth() - userId만 필요할 때
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  // ...
+}
+
+// 방법 2: currentUser() - 전체 사용자 정보 필요할 때
+export async function GET() {
+  const user = await currentUser();
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  console.log(user.emailAddresses[0].emailAddress);
+  // ...
+}
+```
+
+**중요 사항**:
+- `auth()`, `currentUser()`는 반드시 `async/await`와 함께 사용
+- `@clerk/nextjs/server`에서 import (서버 전용)
+- `@clerk/nextjs`에서 import하는 것은 클라이언트 컴포넌트용
+
+#### 3.1.5 Clerk Webhook 연동
+**목적**: Clerk에서 발생한 사용자 이벤트를 Supabase에 동기화
+
+**1. Webhook 엔드포인트 생성**
+**파일**: `app/api/webhooks/clerk/route.ts`
+
+```typescript
+import { Webhook } from 'svix';
+import { headers } from 'next/headers';
+import { WebhookEvent } from '@clerk/nextjs/server';
+
+export async function POST(req: Request) {
+  const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
+  if (!WEBHOOK_SECRET) throw new Error('CLERK_WEBHOOK_SECRET not set');
+
+  // 요청 헤더 및 바디 가져오기
+  const headerPayload = await headers();
+  const svix_id = headerPayload.get('svix-id');
+  const svix_timestamp = headerPayload.get('svix-timestamp');
+  const svix_signature = headerPayload.get('svix-signature');
+
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return Response.json({ error: 'Missing headers' }, { status: 400 });
+  }
+
+  const payload = await req.json();
+  const body = JSON.stringify(payload);
+
+  // Webhook 서명 검증
+  const wh = new Webhook(WEBHOOK_SECRET);
+  let evt: WebhookEvent;
+
+  try {
+    evt = wh.verify(body, {
+      'svix-id': svix_id,
+      'svix-timestamp': svix_timestamp,
+      'svix-signature': svix_signature,
+    }) as WebhookEvent;
+  } catch (err) {
+    return Response.json({ error: 'Verification failed' }, { status: 400 });
+  }
+
+  // 이벤트 타입에 따른 처리
+  const { id } = evt.data;
+  const eventType = evt.type;
+
+  if (eventType === 'user.created') {
+    const { email_addresses, first_name, last_name, image_url } = evt.data;
+    // Supabase에 사용자 생성
+    await createUserInSupabase({
+      clerk_user_id: id,
+      email: email_addresses[0].email_address,
+      name: `${first_name || ''} ${last_name || ''}`.trim(),
+      profile_image_url: image_url,
+    });
+  }
+
+  if (eventType === 'user.updated') {
+    // Supabase 사용자 업데이트
+  }
+
+  if (eventType === 'user.deleted') {
+    // Supabase 사용자 삭제
+  }
+
+  return Response.json({ received: true }, { status: 200 });
+}
+```
+
+**2. Clerk Dashboard에서 Webhook 설정**
+1. **배포 완료 후** 공개 URL 확보 (예: `https://yourdomain.com`)
+2. [Clerk Dashboard](https://dashboard.clerk.com/) > **Webhooks**
+3. **Add Endpoint** 클릭
+4. Endpoint URL: `https://yourdomain.com/api/webhooks/clerk`
+5. 이벤트 선택:
+   - `user.created`
+   - `user.updated`
+   - `user.deleted`
+6. **Signing Secret** 복사 → `.env`에 `CLERK_WEBHOOK_SECRET` 저장
+
+**중요 사항**:
+- ⚠️ Webhook은 **배포 환경에서만** 테스트 가능 (로컬 개발 시 ngrok 등 필요)
+- `svix` 패키지로 서명 검증 필수
+- Webhook 실패 시 Clerk가 자동 재시도
 
 ---
 
@@ -105,16 +287,79 @@ Clerk, Supabase, 토스페이먼츠를 연동한 구독형 사주 분석 서비�
 
 ### 3.4 구독 결제 시스템 (토스페이먼츠)
 
-#### 3.4.1 구독 가입 플로우
-1. 사용자가 구독 관리 페이지에서 "Pro 구독" 버튼 클릭
-2. 토스페이먼츠 SDK로 빌링키 발급 위젯 표시
-3. 사용자 결제 수단 입력 및 인증
-4. 빌링키 발급 성공 시:
-   - Supabase `subscriptions` 테이블에 구독 정보 저장
-   - `billing_key`, `customer_key`, `next_payment_date` (1개월 후) 저장
-   - 구독 상태: `active`
-5. 최초 결제 즉시 실행
-6. 성공 시 사용자 `test_count` +10, Pro 상태 활성화
+#### 3.4.0 사용 SDK 및 API
+- **SDK**: 토스페이먼츠 JavaScript SDK (자동결제/빌링)
+- **주요 문서**:
+  - [자동결제(빌링) 이해하기](https://docs.tosspayments.com/guides/v2/billing.md)
+  - [자동결제(빌링) 결제창 연동하기](https://docs.tosspayments.com/guides/v2/billing/integration.md)
+  - [구독 결제 서비스 구현하기 (1) 빌링키 발급](https://docs.tosspayments.com/blog/subscription-service-1.md)
+  - [구독 결제 서비스 구현하기 (2) 스케줄링](https://docs.tosspayments.com/blog/subscription-service-2.md)
+
+#### 3.4.1 구독 가입 플로우 (빌링키 발급)
+**1. 클라이언트: 빌링키 발급 요청**
+```javascript
+// 토스페이먼츠 JavaScript SDK 로드
+const tossPayments = TossPayments('CLIENT_KEY');
+
+// 빌링키 발급 위젯 요청
+tossPayments.requestBillingAuth('카드', {
+  customerKey: 'clerk_user_id',  // Clerk 사용자 ID
+  successUrl: window.location.origin + '/subscription/success',
+  failUrl: window.location.origin + '/subscription/fail',
+});
+```
+
+**2. 사용자: 결제 수단 입력 및 인증**
+- 토스페이먼츠 결제창에서 카드 정보 입력
+- 카드사 인증 (간편 비밀번호, SMS 등)
+
+**3. 서버: successUrl 리다이렉트 후 빌링키 발급 승인**
+```javascript
+// POST /api/subscription/billing-key
+// Query params: authKey, customerKey
+
+// 토스페이먼츠 API 호출 (서버 to 서버)
+POST https://api.tosspayments.com/v1/billing/authorizations/{authKey}
+Headers:
+  Authorization: Basic {TOSS_SECRET_KEY를 Base64 인코딩}
+  Content-Type: application/json
+Body:
+  {
+    "customerKey": "clerk_user_id"
+  }
+
+// 응답에서 billingKey 획득
+```
+
+**4. 서버: 최초 결제 즉시 실행**
+```javascript
+// 빌링키로 즉시 결제 요청
+POST https://api.tosspayments.com/v1/billing/{billingKey}
+Headers:
+  Authorization: Basic {TOSS_SECRET_KEY를 Base64 인코딩}
+  Content-Type: application/json
+Body:
+  {
+    "customerKey": "clerk_user_id",
+    "amount": 9900,
+    "orderId": "order_uuid",
+    "orderName": "사주 분석 Pro 구독 (첫 결제)",
+    "customerEmail": "user@example.com",
+    "customerName": "홍길동"
+  }
+```
+
+**5. 서버: Supabase 데이터 저장**
+- `subscriptions` 테이블에 구독 정보 저장
+  - `billing_key`: 발급받은 빌링키
+  - `customer_key`: `clerk_user_id`
+  - `status`: `'active'`
+  - `next_payment_date`: `현재 날짜 + 1개월`
+  - `last_payment_date`: `현재 날짜`
+- `users` 테이블 업데이트
+  - `is_pro`: `true`
+  - `test_count`: `+10`
+- `payment_history` 테이블에 결제 기록 추가
 
 #### 3.4.2 구독 상태 관리
 
@@ -178,34 +423,54 @@ WHERE next_payment_date = CURRENT_DATE
 **3. 각 구독 건 처리**
 
 **Case A: 취소 예정 건 (`cancellation_pending`)**
-```
-1. 구독 상태를 'expired'로 변경
-2. 토스페이먼츠 API 호출: DELETE /billing-key/{billing_key}
-3. users 테이블에서 is_pro = false 설정
-4. (선택) test_count 초기화하지 않음 (남은 횟수는 유지)
+```javascript
+// 1. 구독 상태를 'expired'로 변경
+UPDATE subscriptions SET status = 'expired' WHERE id = {subscription_id};
+
+// 2. 토스페이먼츠 빌링키 삭제 API 호출
+DELETE https://api.tosspayments.com/v1/billing/authorizations/{billingKey}
+Headers:
+  Authorization: Basic {TOSS_SECRET_KEY를 Base64 인코딩}
+
+// 3. users 테이블에서 is_pro = false 설정
+UPDATE users SET is_pro = false WHERE id = {user_id};
+
+// 4. (선택) test_count 초기화하지 않음 (남은 횟수는 유지)
 ```
 
 **Case B: 활성 구독 건 (`active`)**
-```
-1. 토스페이먼츠 정기 결제 API 호출:
-   POST /v1/billing/{billing_key}
-   {
-     "customerKey": "...",
-     "amount": 9900,
-     "orderName": "사주 분석 Pro 구독"
-   }
+```javascript
+// 1. 토스페이먼츠 빌링키 결제 API 호출
+POST https://api.tosspayments.com/v1/billing/{billingKey}
+Headers:
+  Authorization: Basic {TOSS_SECRET_KEY를 Base64 인코딩}
+  Content-Type: application/json
+Body:
+  {
+    "customerKey": "clerk_user_id",
+    "amount": 9900,
+    "orderId": "subscription_renewal_uuid",
+    "orderName": "사주 분석 Pro 구독 (정기결제)",
+    "customerEmail": "user@example.com",
+    "customerName": "홍길동"
+  }
 
-2-A. 결제 성공:
-   - users.test_count += 10
-   - subscriptions.next_payment_date += 1 month
-   - subscriptions.last_payment_date = today
-   - payment_history 테이블에 성공 기록
+// 2-A. 결제 성공 (HTTP 200)
+UPDATE users SET test_count = test_count + 10 WHERE id = {user_id};
+UPDATE subscriptions SET
+  next_payment_date = next_payment_date + INTERVAL '1 month',
+  last_payment_date = CURRENT_DATE
+WHERE id = {subscription_id};
+INSERT INTO payment_history (subscription_id, amount, status, payment_key)
+VALUES ({subscription_id}, 9900, 'success', {paymentKey});
 
-2-B. 결제 실패:
-   - subscriptions.status = 'failed'
-   - 토스페이먼츠 API 호출: DELETE /billing-key/{billing_key}
-   - users.is_pro = false
-   - payment_history 테이블에 실패 기록
+// 2-B. 결제 실패 (HTTP 4xx/5xx)
+UPDATE subscriptions SET status = 'failed' WHERE id = {subscription_id};
+DELETE https://api.tosspayments.com/v1/billing/authorizations/{billingKey}
+  Headers: Authorization: Basic {TOSS_SECRET_KEY를 Base64 인코딩}
+UPDATE users SET is_pro = false WHERE id = {user_id};
+INSERT INTO payment_history (subscription_id, amount, status, error_message)
+VALUES ({subscription_id}, 9900, 'failed', {error_message});
 ```
 
 #### 3.5.3 재구독
@@ -297,27 +562,68 @@ CREATE TABLE payment_history (
 
 ## 6. 환경 변수
 
+### 6.0 필수 패키지
 ```bash
 # Clerk
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
-CLERK_WEBHOOK_SECRET=
-
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
+npm install @clerk/nextjs@latest svix
 
 # 토스페이먼츠
-NEXT_PUBLIC_TOSS_CLIENT_KEY=
-TOSS_SECRET_KEY=
+npm install @tosspayments/tosspayments-sdk
+
+# Gemini AI
+npm install @google/generative-ai
+```
+
+### 6.1 환경 변수 설정
+```bash
+# Clerk (https://dashboard.clerk.com)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...  # 클라이언트용 공개 키
+CLERK_SECRET_KEY=sk_test_...                   # 서버용 비밀 키
+CLERK_WEBHOOK_SECRET=whsec_...                 # Webhook 서명 검증용 (배포 후 설정)
+
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJh...          # 클라이언트용 익명 키
+SUPABASE_SERVICE_ROLE_KEY=eyJh...              # 서버용 service_role 키 (절대 클라이언트 노출 금지)
+
+# 토스페이먼츠
+NEXT_PUBLIC_TOSS_CLIENT_KEY=test_ck_...        # 클라이언트용 키 (SDK 초기화)
+TOSS_SECRET_KEY=test_sk_...                    # 서버용 시크릿 키 (API 호출)
 
 # Gemini API
-GEMINI_API_KEY=
+GEMINI_API_KEY=AIza...                         # Gemini API 키
 
 # Cron 보안
-CRON_SECRET=
+CRON_SECRET=your-strong-random-secret-here     # Supabase Cron 요청 검증용
 ```
+
+### 6.2 토스페이먼츠 API 인증 방식
+토스페이먼츠 API는 **Basic 인증** 방식을 사용합니다.
+
+```javascript
+// Node.js 예시
+const authorization = 'Basic ' + Buffer.from(TOSS_SECRET_KEY + ':').toString('base64');
+
+fetch('https://api.tosspayments.com/v1/billing/{billingKey}', {
+  method: 'POST',
+  headers: {
+    'Authorization': authorization,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ /* ... */ })
+});
+```
+
+**중요 사항**:
+- 시크릿 키 뒤에 콜론(`:`)을 붙이고 Base64로 인코딩
+- 시크릿 키는 **절대 클라이언트 코드에 노출하지 않음**
+- 테스트 환경: `test_sk_...` / 라이브 환경: `live_sk_...`
+
+### 6.3 환경별 키 구분
+| 환경 | 키 접두어 | 용도 |
+|------|----------|------|
+| 테스트 | `test_ck_...`, `test_sk_...` | 개발 및 테스트 |
+| 라이브 | `live_ck_...`, `live_sk_...` | 실제 운영 환경 |
 
 ---
 
@@ -395,8 +701,58 @@ CRON_SECRET=
 - [Gemini API 문서](https://ai.google.dev/docs)
 - [Supabase 문서](https://supabase.com/docs)
 
-### 10.2 구현 힌트
-- Clerk Webhook은 배포 환경에서만 테스트 가능
-- 빌링키는 고객 식별자로 `clerk_user_id` 사용 권장
-- Supabase Cron 실행 로그는 Supabase Dashboard > Database > Cron Jobs에서 확인
-- Gemini API 호출 시 안전 설정(Safety Settings) 적절히 조정
+### 10.2 토스페이먼츠 핵심 가이드
+**자동결제(빌링) 관련**:
+- [자동결제(빌링) 이해하기](https://docs.tosspayments.com/guides/v2/billing.md)
+- [자동결제(빌링) 결제창 연동하기](https://docs.tosspayments.com/guides/v2/billing/integration.md)
+- [구독 결제 서비스 구현하기 (1) 빌링키 발급](https://docs.tosspayments.com/blog/subscription-service-1.md)
+- [구독 결제 서비스 구현하기 (2) 스케줄링](https://docs.tosspayments.com/blog/subscription-service-2.md)
+
+**API 및 인증**:
+- [API 키 발급 및 사용](https://docs.tosspayments.com/reference/using-api/api-keys.md)
+- [Basic 인증과 Bearer 인증](https://docs.tosspayments.com/blog/everything-about-basic-bearer-auth.md)
+- [시크릿 키 베스트 프랙티스](https://docs.tosspayments.com/blog/secret-key-best-practice.md)
+- [코어 API 레퍼런스](https://docs.tosspayments.com/reference.md)
+
+**테스트 및 배포**:
+- [회원가입, 사업자번호 없이 결제 테스트하기](https://docs.tosspayments.com/blog/how-to-test-toss-payments.md)
+- [환경 설정하기](https://docs.tosspayments.com/guides/v2/get-started/environment.md)
+- [배포 체크리스트](https://docs.tosspayments.com/guides/v2/deploy-checklist.md)
+
+### 10.3 Clerk 핵심 가이드
+**Quick Start**:
+- [Clerk Next.js App Router Quickstart](https://clerk.com/docs/quickstarts/nextjs)
+- [Google OAuth 연동 가이드](https://clerk.com/blog/raw/nextjs-google-authentication)
+
+**인증 및 사용자 관리**:
+- [Clerk Dashboard](https://dashboard.clerk.com/)
+- [Webhook 연동 가이드](https://clerk.com/docs/integrations/webhooks)
+- [서버 사이드 인증](https://clerk.com/docs/references/nextjs/auth)
+- [AI Prompts for Clerk](https://clerk.com/docs/guides/development/ai-prompts)
+
+### 10.4 구현 힌트
+**Clerk**:
+- ✅ **반드시 사용**: `clerkMiddleware()` (최신 버전)
+- ❌ **사용 금지**: `authMiddleware()` (구버전)
+- Webhook은 배포 환경에서만 테스트 가능 (로컬은 ngrok 필요)
+- `clerk_user_id`를 토스페이먼츠 `customerKey`로 사용
+- `auth()`, `currentUser()`는 `@clerk/nextjs/server`에서 import
+- `svix` 패키지로 Webhook 서명 검증 필수
+
+**토스페이먼츠**:
+- 빌링키 발급: `requestBillingAuth()` 메서드 사용
+- 빌링키로 결제: `POST /v1/billing/{billingKey}` API 호출
+- 빌링키 삭제: `DELETE /v1/billing/authorizations/{billingKey}` API 호출
+- Basic 인증: `시크릿키:` (콜론 포함) Base64 인코딩
+- 테스트 환경에서는 실제 결제 없이 시뮬레이션 가능
+- `orderId`는 매 결제마다 고유해야 함 (UUID 권장)
+
+**Supabase**:
+- Cron 실행 로그: Supabase Dashboard > Database > Cron Jobs
+- Cron 시간대: UTC 기준 (한국 시간 02:00 = UTC 17:00 전날)
+- `net.http_post()` 함수로 외부 API 호출
+
+**Gemini API**:
+- Safety Settings 적절히 조정 (사주 콘텐츠 특성 고려)
+- Rate Limit 확인 (무료: 분당 15회, 유료: 프로젝트별 상이)
+- `gemini-2.5-flash` vs `gemini-2.5-pro`: 속도/품질 트레이드오프
