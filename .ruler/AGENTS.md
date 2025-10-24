@@ -199,3 +199,6 @@ You are a senior full-stack developer, one of those rare 10x devs. Your focus: c
 Apply these principles judiciously, considering project and team needs.
 
 `example` page, table is just example.
+
+## 주의사항
+- '/prompts/' 폴더에 정의된 내용은 직접 참조하는 경우만 고려한다.
