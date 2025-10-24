@@ -10,6 +10,8 @@
 ### 1.1 개념
 **자동결제(빌링)**는 고객이 최초 1회 결제 정보를 등록하면, 이후 별도 인증 없이 자동으로 결제되는 방식입니다.
 
+**⚠️ 중요**: 자동결제 API는 토스페이먼츠와 **추가 계약이 필요한 기능**입니다. 사용 전 반드시 계약을 완료해야 합니다.
+
 ### 1.2 사용 케이스
 - 구독형 서비스 (OTT, 음악 스트리밍)
 - 정기 배송
@@ -20,7 +22,7 @@
 | 용어 | 설명 |
 |------|------|
 | **빌링키 (Billing Key)** | 고객의 카드 정보를 암호화하여 저장한 토큰 |
-| **Customer Key** | 고객을 식별하는 고유 키 (예: `clerk_user_id`) |
+| **Customer Key** | 고객을 식별하는 고유 키 (⚠️ **UUID 등 추정 불가능한 값** 사용 필수) |
 | **정기 결제** | 빌링키를 사용하여 주기적으로 자동 결제 |
 
 ---
@@ -45,20 +47,25 @@
 
 ### 3.1 클라이언트 (빌링키 발급 요청)
 
-```typescript
-// 토스페이먼츠 SDK 로드
-const tossPayments = await loadTossPayments('CLIENT_KEY');
+**SDK v2 사용**:
 
-// 빌링키 발급 요청
-tossPayments.requestBillingAuth('카드', {
-  customerKey: 'clerk_user_id',  // 고객 고유 ID
-  successUrl: window.location.origin + '/subscription/success',
-  failUrl: window.location.origin + '/subscription/fail',
-});
+```html
+<script src="https://js.tosspayments.com/v2"></script>
+<script>
+  const tossPayments = TossPayments('YOUR_CLIENT_KEY');
+  const payment = tossPayments.payment();
+
+  // 빌링키 발급 요청
+  payment.requestBillingAuth({
+    customerKey: crypto.randomUUID(),  // ⚠️ 추정 불가능한 UUID 사용
+    successUrl: window.location.origin + '/subscription/success',
+    failUrl: window.location.origin + '/subscription/fail',
+  });
+</script>
 ```
 
 **주요 파라미터**:
-- `customerKey`: 고객 식별자 (Clerk User ID 사용 권장)
+- `customerKey`: **⚠️ 보안 중요** - UUID 등 추정 불가능한 랜덤 값 사용 (이메일, 전화번호 등 추정 가능한 값 금지)
 - `successUrl`: 빌링키 발급 성공 시 리다이렉트 URL
 - `failUrl`: 빌링키 발급 실패 시 리다이렉트 URL
 
@@ -74,16 +81,17 @@ tossPayments.requestBillingAuth('카드', {
 ```typescript
 // Query Parameters: authKey, customerKey
 
-// 1. 빌링키 승인 API 호출
+// 1. 빌링키 발급 승인 API 호출
 const response = await fetch(
-  `https://api.tosspayments.com/v1/billing/authorizations/${authKey}`,
+  'https://api.tosspayments.com/v1/billing/authorizations/issue',  // ⚠️ /issue 엔드포인트 사용
   {
     method: 'POST',
     headers: {
-      'Authorization': 'Basic ' + Buffer.from(TOSS_SECRET_KEY + ':').toString('base64'),
+      'Authorization': 'Basic ' + Buffer.from(process.env.TOSS_SECRET_KEY + ':').toString('base64'),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      authKey: authKey,
       customerKey: customerKey,
     }),
   }
@@ -98,7 +106,7 @@ const { billingKey } = await response.json();
 ```
 
 **중요**:
-- `authKey`는 일회용이며 10분 내 사용해야 함
+- `authKey`는 일회용이며 **짧은 시간 내** 사용해야 함 (발급 후 즉시 처리 권장)
 - 발급받은 `billingKey`는 안전하게 서버에만 저장
 
 ---
@@ -114,13 +122,14 @@ const response = await fetch(
   {
     method: 'POST',
     headers: {
-      'Authorization': 'Basic ' + Buffer.from(TOSS_SECRET_KEY + ':').toString('base64'),
+      'Authorization': 'Basic ' + Buffer.from(process.env.TOSS_SECRET_KEY + ':').toString('base64'),
       'Content-Type': 'application/json',
+      'Idempotency-Key': crypto.randomUUID(),  // ⚠️ 중복 결제 방지
     },
     body: JSON.stringify({
-      customerKey: 'clerk_user_id',
+      customerKey: customerKey,
       amount: 9900,
-      orderId: 'order_' + Date.now(),  // 매번 고유해야 함
+      orderId: 'order_' + crypto.randomUUID(),  // ⚠️ 매번 고유한 UUID 사용
       orderName: '사주 분석 Pro 구독 (첫 결제)',
       customerEmail: 'user@example.com',
       customerName: '홍길동',
@@ -139,8 +148,9 @@ if (response.ok) {
 
 **주요 파라미터**:
 - `amount`: 결제 금액 (원 단위)
-- `orderId`: **매 결제마다 고유**해야 함 (UUID 권장)
+- `orderId`: **매 결제마다 고유**해야 함 (6~64자, UUID 권장)
 - `orderName`: 결제 내역에 표시될 이름
+- `Idempotency-Key`: 네트워크 오류 등으로 인한 중복 결제 방지
 
 ---
 
@@ -213,13 +223,14 @@ async function processPayment(subscription) {
       {
         method: 'POST',
         headers: {
-          'Authorization': 'Basic ' + Buffer.from(TOSS_SECRET_KEY + ':').toString('base64'),
+          'Authorization': 'Basic ' + Buffer.from(process.env.TOSS_SECRET_KEY + ':').toString('base64'),
           'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),  // ⚠️ 중복 결제 방지
         },
         body: JSON.stringify({
           customerKey: subscription.customer_key,
           amount: 9900,
-          orderId: 'renewal_' + Date.now(),
+          orderId: 'renewal_' + crypto.randomUUID(),  // ⚠️ UUID 사용
           orderName: '사주 분석 Pro 구독 (정기결제)',
         }),
       }
@@ -234,10 +245,9 @@ async function processPayment(subscription) {
     } else {
       // 결제 실패
       // - subscriptions.status = 'failed'
-      // - 빌링키 삭제
       // - users.is_pro = false
       // - payment_history에 실패 기록
-      await deleteBillingKey(subscription.billing_key);
+      // ⚠️ 주의: 빌링키는 삭제하지 않고 상태만 변경 (재시도 가능하도록)
     }
   } catch (error) {
     // 에러 처리
@@ -267,22 +277,16 @@ async function handleCancellation(subscription) {
     .update({ status: 'expired' })
     .eq('id', subscription.id);
 
-  // 2. 빌링키 삭제
-  await fetch(
-    `https://api.tosspayments.com/v1/billing/authorizations/${subscription.billing_key}`,
-    {
-      method: 'DELETE',
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from(TOSS_SECRET_KEY + ':').toString('base64'),
-      },
-    }
-  );
-
-  // 3. Pro 상태 해제
+  // 2. Pro 상태 해제
   await supabase
     .from('users')
     .update({ is_pro: false })
     .eq('clerk_user_id', subscription.customer_key);
+
+  // ⚠️ 주의: 빌링키는 삭제하지 않음
+  // - 토스페이먼츠 공식 가이드에 빌링키 삭제 API 미제공
+  // - DB에서 상태값만 'expired'로 관리
+  // - 재구독 시 새로운 빌링키 발급 필요
 }
 ```
 
@@ -292,22 +296,6 @@ async function handleCancellation(subscription) {
 // 취소 예정 상태에서 철회
 // - subscriptions.status = 'active'
 // - 다음 결제일에 정상 결제 진행
-```
-
-### 6.3 빌링키 삭제
-
-```typescript
-async function deleteBillingKey(billingKey: string) {
-  await fetch(
-    `https://api.tosspayments.com/v1/billing/authorizations/${billingKey}`,
-    {
-      method: 'DELETE',
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from(TOSS_SECRET_KEY + ':').toString('base64'),
-      },
-    }
-  );
-}
 ```
 
 ---
@@ -367,14 +355,15 @@ active ──(사용자 취소 신청)──> cancellation_pending
 
 | 메서드 | 엔드포인트 | 용도 |
 |--------|-----------|------|
-| `POST` | `/v1/billing/authorizations/{authKey}` | 빌링키 발급 승인 |
-| `DELETE` | `/v1/billing/authorizations/{billingKey}` | 빌링키 삭제 |
+| `POST` | `/v1/billing/authorizations/issue` | 빌링키 발급 승인 ⚠️ |
+
+**⚠️ 중요**: 빌링키 삭제 API는 공식 가이드에 미제공됩니다. 상태값만 DB에서 관리하세요.
 
 ### 9.2 결제 관련
 
 | 메서드 | 엔드포인트 | 용도 |
 |--------|-----------|------|
-| `POST` | `/v1/billing/{billingKey}` | 빌링키로 결제 |
+| `POST` | `/v1/billing/{billingKey}` | 빌링키로 결제 (Idempotency-Key 필수 권장) |
 
 ---
 
@@ -400,23 +389,36 @@ npm install @tosspayments/tosspayments-sdk
 
 ### ✅ 반드시 지켜야 할 사항
 
-1. **orderId 고유성**
-   - 매 결제마다 고유한 `orderId` 사용 (UUID 권장)
+1. **자동결제 계약 확인**
+   - 자동결제 API는 토스페이먼츠와 **추가 계약 필요**
+   - 계약 없이는 API 사용 불가
 
-2. **빌링키 보안**
+2. **orderId 고유성**
+   - 매 결제마다 고유한 `orderId` 사용 (6~64자, UUID 권장)
+
+3. **customerKey 보안**
+   - ⚠️ **UUID 등 추정 불가능한 랜덤 값** 사용 필수
+   - 이메일, 전화번호 등 추정 가능한 값 사용 금지
+
+4. **빌링키 보안**
    - 빌링키는 서버에만 저장
    - 절대 클라이언트 노출 금지
 
-3. **시크릿 키 보안**
+5. **시크릿 키 보안**
    - `TOSS_SECRET_KEY`는 서버 환경 변수에만 저장
    - 클라이언트 코드나 Git에 포함 금지
 
-4. **authKey 유효 시간**
-   - 빌링키 발급 승인은 10분 내 완료해야 함
+6. **authKey 유효 시간**
+   - 빌링키 발급 승인은 **짧은 시간 내** 완료 (발급 후 즉시 처리 권장)
 
-5. **결제 실패 처리**
-   - 결제 실패 시 즉시 빌링키 삭제
+7. **결제 실패 처리**
+   - ⚠️ 결제 실패 시 **빌링키 삭제하지 않음** (삭제 API 미제공)
+   - DB에서 구독 상태만 'failed'로 변경
    - 사용자에게 실패 알림
+
+8. **멱등성 보장**
+   - 모든 결제 요청에 `Idempotency-Key` 헤더 추가 권장
+   - 네트워크 오류로 인한 중복 결제 방지
 
 ### ✅ 권장 사항
 
@@ -429,7 +431,8 @@ npm install @tosspayments/tosspayments-sdk
    - 성공/실패 여부, 에러 메시지 포함
 
 3. **Customer Key 설계**
-   - Clerk User ID를 `customerKey`로 사용
+   - ⚠️ **UUID 등 추정 불가능한 랜덤 값** 사용
+   - Clerk User ID와 별도로 생성하여 매핑 관리
    - 고객당 하나의 빌링키만 유지
 
 4. **Cron 실행 로그**
