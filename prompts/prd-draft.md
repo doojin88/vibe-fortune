@@ -6,7 +6,7 @@
 Clerk, Supabase, 토스페이먼츠를 연동한 구독형 사주 분석 서비스 구현
 
 ### 1.2 핵심 가치
-- Google 로그인 기반 사용자 인증
+- Clerk 로그인 기반 사용자 인증
 - 무료/유료 구독 모델을 통한 차등화된 서비스 제공
 - Gemini AI 기반 사주팔자 분석
 - 자동 정기 결제 시스템
@@ -18,7 +18,7 @@ Clerk, Supabase, 토스페이먼츠를 연동한 구독형 사주 분석 서비�
 | 구분 | 기술 | 역할 |
 |------|------|------|
 | 프레임워크 | Next.js 15 (App Router) | 풀스택 웹 애플리케이션 |
-| 인증 | Clerk | Google OAuth, 세션 관리, Webhook |
+| 인증 | Clerk | 로그인, 세션 관리, Webhook |
 | 데이터베이스 | Supabase (PostgreSQL) | 데이터 저장, Cron Jobs |
 | 결제 | 토스페이먼츠 | 빌링키 발급, 정기 결제 |
 | AI 분석 | Google Gemini API | 사주 분석 (`gemini-2.5-flash`, `gemini-2.5-pro`) |
@@ -45,9 +45,9 @@ Clerk, Supabase, 토스페이먼츠를 연동한 구독형 사주 분석 서비�
 
 ### 4.1 사용자 인증 (Clerk)
 
-#### 4.1.1 Google 로그인
+#### 4.1.1 Clerk 로그인
 - Clerk SDK 기본 컴포넌트 사용 (`SignInButton`, `SignUpButton`, `UserButton`)
-- Clerk Dashboard에서 Google OAuth 활성화
+- Clerk Dashboard에서 로그인 설정
 - 로그인/회원가입/로그아웃 기능 제공
 
 #### 4.1.2 Clerk Webhook
@@ -177,7 +177,7 @@ CRON_REQUEST_SECRET=your-strong-random-secret
 ## 7. 통과 조건 체크리스트
 
 ### 7.1 필수 연동
-- [ ] Clerk SDK 연동 (Google 로그인)
+- [ ] Clerk SDK 연동 (로그인)
 - [ ] Clerk Webhook 구현 (사용자 동기화)
 - [ ] 토스페이먼츠 SDK 연동 (빌링키 발급)
 - [ ] 토스페이먼츠 API 연동 (정기 결제, 빌링키 삭제)

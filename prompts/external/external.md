@@ -6,7 +6,7 @@
 Clerk, Supabase, 토스페이먼츠를 연동한 구독형 사주 분석 서비스 구현
 
 ### 1.2 핵심 가치
-- Google 로그인 기반 사용자 인증
+- Clerk 로그인 기반 사용자 인증
 - 무료/유료 구독 모델을 통한 차등화된 서비스 제공
 - Gemini AI 기반 사주팔자 분석
 - 자동 정기 결제 시스템
@@ -18,7 +18,7 @@ Clerk, Supabase, 토스페이먼츠를 연동한 구독형 사주 분석 서비�
 | 구분 | 기술 | 역할 |
 |------|------|------|
 | 프레임워크 | Next.js 15 (App Router) | 풀스택 웹 애플리케이션 |
-| 인증 | Clerk | Google OAuth, 세션 관리, Webhook |
+| 인증 | Clerk | 로그인, 세션 관리, Webhook |
 | 데이터베이스 | Supabase (PostgreSQL) | 데이터 저장, Cron Jobs |
 | 결제 | 토스페이먼츠 | 빌링키 발급, 정기 결제 |
 | AI 분석 | Google Gemini API | 사주 분석 (`gemini-2.5-flash`, `gemini-2.5-pro`) |
@@ -37,7 +37,7 @@ npm install @clerk/nextjs@latest
 
 **주요 문서**:
 - [Clerk Next.js Quickstart](https://clerk.com/docs/quickstarts/nextjs)
-- [Google OAuth 연동 가이드](https://clerk.com/blog/raw/nextjs-google-authentication)
+- [Clerk 로그인 연동 가이드](https://clerk.com/docs/quickstarts/nextjs)
 
 #### 3.1.1 Clerk 미들웨어 설정
 **파일**: `middleware.ts` (프로젝트 루트 또는 `src/` 디렉토리)
@@ -78,7 +78,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-#### 3.1.3 Google 로그인 UI 구현
+#### 3.1.3 Clerk 로그인 UI 구현
 Clerk SDK 기본 컴포넌트 사용:
 
 ```typescript
@@ -108,7 +108,7 @@ export default function Header() {
 **Clerk Dashboard 설정**:
 1. [Clerk Dashboard](https://dashboard.clerk.com/) 로그인
 2. Application 선택 > **User & Authentication** > **Social Connections**
-3. **Google** 활성화
+3. 원하는 소셜 로그인 방식 활성화
 4. 자동 생성된 키 사용 또는 커스텀 OAuth 앱 연결
 
 #### 3.1.4 서버에서 사용자 정보 접근
@@ -630,7 +630,7 @@ fetch('https://api.tosspayments.com/v1/billing/{billingKey}', {
 ## 7. 통과 조건 체크리스트
 
 ### 7.1 필수 연동
-- [ ] Clerk SDK 연동 (Google 로그인)
+- [ ] Clerk SDK 연동 (로그인)
 - [ ] Clerk Webhook 구현 (사용자 동기화)
 - [ ] 토스페이먼츠 SDK 연동 (빌링키 발급)
 - [ ] 토스페이먼츠 API 연동 (정기 결제, 빌링키 삭제)
@@ -722,7 +722,7 @@ fetch('https://api.tosspayments.com/v1/billing/{billingKey}', {
 ### 10.3 Clerk 핵심 가이드
 **Quick Start**:
 - [Clerk Next.js App Router Quickstart](https://clerk.com/docs/quickstarts/nextjs)
-- [Google OAuth 연동 가이드](https://clerk.com/blog/raw/nextjs-google-authentication)
+- [Clerk 로그인 연동 가이드](https://clerk.com/docs/quickstarts/nextjs)
 
 **인증 및 사용자 관리**:
 - [Clerk Dashboard](https://dashboard.clerk.com/)

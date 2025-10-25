@@ -7,7 +7,7 @@ Gemini API 기반 사주분석을 제공하는 구독형 웹 서비스
 
 ### 1.2 기술 스택
 - **Frontend & Backend**: Next.js (App Router)
-- **인증**: Clerk (Google OAuth)
+- **인증**: Clerk
 - **데이터베이스**: Supabase (PostgreSQL)
 - **결제**: 토스페이먼츠 (정기결제/빌링키)
 - **AI**: Google Gemini API (gemini-2.5-flash, gemini-2.5-pro)
@@ -18,7 +18,7 @@ Gemini API 기반 사주분석을 제공하는 구독형 웹 서비스
 ## 2. 핵심 기능 요구사항
 
 ### 2.1 인증 (Authentication)
-- **방식**: Clerk SDK를 통한 Google 로그인
+- **방식**: Clerk SDK를 통한 로그인
 - **인증 페이지**: Clerk에서 기본 제공하는 UI 사용
 - **인증 상태 관리**: Clerk의 세션 관리 활용
 - **보호된 라우트**: 홈 페이지를 제외한 모든 페이지는 인증 필수
@@ -300,7 +300,7 @@ WEBHOOK_SECRET_KEY=  # API 호출 검증용
 
 ### 12.1 인증 플로우
 1. 비로그인 상태에서 보호된 페이지 접근 → 로그인 페이지로 리다이렉트
-2. Google 로그인 → 성공 시 대시보드로 이동
+2. Clerk 로그인 → 성공 시 대시보드로 이동
 3. 로그아웃 → 홈으로 리다이렉트
 
 ### 12.2 분석 플로우
