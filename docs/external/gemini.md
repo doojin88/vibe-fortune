@@ -8,12 +8,12 @@ Google Gemini API를 사용한 가이드
 ## 1. 필수 패키지 설치
 
 ```bash
-npm install @google/generative-ai
+npm install @google/genai
 ```
 
 **주요 패키지**:
 
-- `@google/generative-ai`: Google Gemini API 공식 SDK
+- `@google/genai`: Google Gemini API 공식 최신 SDK (Node.js v18+ 필요)
 
 ---
 
@@ -23,12 +23,13 @@ npm install @google/generative-ai
 
 ```bash
 # Google Gemini API
-GOOGLE_GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 **보안 주의사항**:
 
 - API 키는 서버 환경 변수에만 저장
+- 환경 변수명은 반드시 `GEMINI_API_KEY`로 설정 (SDK가 자동으로 인식)
 - 클라이언트 코드에 노출 금지
 - Git 저장소에 커밋 금지
 
@@ -41,40 +42,51 @@ GOOGLE_GEMINI_API_KEY=your_gemini_api_key_here
 **파일**: `src/lib/gemini/client.ts`
 
 ```typescript
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
+// 환경 변수 GEMINI_API_KEY를 자동으로 인식
+const ai = new GoogleGenAI({});
 
-export const geminiModel = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash" 
-});
-
-export default geminiModel;
+export { ai };
 ```
 
-### 3.2 모델 설정 옵션
+### 3.2 기본 텍스트 생성 예시
 
 ```typescript
-const model = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash",
-  generationConfig: {
+import { ai } from '@/lib/gemini/client';
+
+async function generateText() {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: "Explain how AI works",
+  });
+
+  console.log(response.text);
+}
+```
+
+### 3.3 고급 설정 옵션 (Config)
+
+```typescript
+const response = await ai.models.generateContent({
+  model: "gemini-2.5-flash",
+  contents: "Explain how AI works",
+  config: {
+    systemInstruction: "You are a helpful AI assistant.",
     temperature: 0.7,        // 창의성 수준 (0.0-1.0)
-    topK: 40,               // 토큰 선택 다양성
-    topP: 0.95,             // 누적 확률 임계값
-    maxOutputTokens: 2048,  // 최대 출력 토큰 수
+    maxOutputTokens: 2048,   // 최대 출력 토큰 수
+    thinkingConfig: {
+      thinkingBudget: 0,     // Thinking 비활성화 (2.5 모델 전용)
+    },
   },
-  safetySettings: [
-    {
-      category: "HARM_CATEGORY_HARASSMENT",
-      threshold: "BLOCK_MEDIUM_AND_ABOVE",
-    },
-    {
-      category: "HARM_CATEGORY_HATE_SPEECH", 
-      threshold: "BLOCK_MEDIUM_AND_ABOVE",
-    },
-  ],
 });
 ```
+
+**주요 설정**:
+- `systemInstruction`: 시스템 프롬프트 (모델 행동 가이드)
+- `temperature`: 창의성 수준 (낮을수록 일관성 높음)
+- `maxOutputTokens`: 최대 응답 길이
+- `thinkingConfig`: Gemini 2.5 모델의 사고 과정 제어
 
 ---
 
@@ -281,16 +293,19 @@ export type FortuneAnalysisResponse = z.infer<typeof FortuneAnalysisResponseSche
 **파일**: `src/features/fortune/backend/service.ts`
 
 ```typescript
-import { geminiModel } from '@/lib/gemini/client';
+import { ai } from '@/lib/gemini/client';
 import { FORTUNE_ANALYSIS_PROMPT, ADVANCED_FORTUNE_PROMPT } from '../constants/prompts';
 import { FortuneAnalysisRequest } from './schema';
 
 export class FortuneAnalysisService {
   async analyzeFortune(request: FortuneAnalysisRequest) {
     try {
-      // 프롬프트 선택 (Pro 사용자는 고급 분석)
-      const prompt = request.isPro 
-        ? ADVANCED_FORTUNE_PROMPT 
+      // 모델 선택 (Pro 사용자는 Pro 모델, 무료 사용자는 Flash 모델)
+      const model = request.isPro ? "gemini-2.5-pro" : "gemini-2.5-flash";
+
+      // 프롬프트 선택
+      const prompt = request.isPro
+        ? ADVANCED_FORTUNE_PROMPT
         : FORTUNE_ANALYSIS_PROMPT;
 
       // 프롬프트에 사용자 정보 삽입
@@ -300,14 +315,24 @@ export class FortuneAnalysisService {
         .replace('{birthTime}', request.birthTime || '미상')
         .replace('{gender}', request.gender === 'male' ? '남성' : '여성');
 
-      // Gemini API 호출
-      const result = await geminiModel.generateContent(formattedPrompt);
-      const response = await result.response;
-      const analysisText = response.text();
+      // Gemini API 호출 (최신 SDK)
+      const response = await ai.models.generateContent({
+        model,
+        contents: formattedPrompt,
+        config: {
+          temperature: 0.7,
+          maxOutputTokens: 4096,
+          thinkingConfig: {
+            thinkingBudget: 0, // Thinking 비활성화로 응답 속도 향상
+          },
+        },
+      });
+
+      const analysisText = response.text;
 
       // JSON 파싱 및 검증
       const analysisResult = this.parseAnalysisResult(analysisText);
-      
+
       return {
         success: true,
         data: analysisResult,
@@ -331,7 +356,7 @@ export class FortuneAnalysisService {
 
       const jsonString = jsonMatch[1];
       const parsed = JSON.parse(jsonString);
-      
+
       // 기본 검증
       if (!parsed.heavenlyStems || !parsed.earthlyBranches) {
         throw new Error('필수 분석 결과가 누락되었습니다.');
@@ -591,11 +616,15 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24시간
 
 ```typescript
 // Gemini API 호출 최적화
-const model = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash", // 빠른 응답을 위한 모델 선택
-  generationConfig: {
+const response = await ai.models.generateContent({
+  model: "gemini-2.5-flash", // 빠른 응답을 위한 Flash 모델 사용
+  contents: prompt,
+  config: {
     temperature: 0.7,
-    maxOutputTokens: 1024, // 토큰 수 제한으로 응답 시간 단축
+    maxOutputTokens: 1024,   // 토큰 수 제한으로 응답 시간 단축
+    thinkingConfig: {
+      thinkingBudget: 0,     // Thinking 비활성화로 즉각 응답
+    },
   },
 });
 ```
@@ -605,8 +634,8 @@ const model = genAI.getGenerativeModel({
 ## 8. 환경 변수 정리
 
 ```bash
-# Google Gemini API
-GOOGLE_GEMINI_API_KEY=your_gemini_api_key_here
+# Google Gemini API (환경 변수명 주의: GEMINI_API_KEY)
+GEMINI_API_KEY=your_gemini_api_key_here
 
 # 분석 제한 설정
 FORTUNE_ANALYSIS_RATE_LIMIT_FREE=3
