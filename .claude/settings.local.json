@@ -1,7 +1,15 @@
 {
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:www.npmjs.com)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "shadcn",
-    "playwright"
-  ],
-  "enableAllProjectMcpServers": true
+    "playwright",
+    "tosspayments-integration-guide"
+  ]
 }
