@@ -16,6 +16,8 @@
 - 구독형 서비스 (OTT, 음악 스트리밍)
 - 정기 배송
 - 월간 멤버십
+- 정기 기부금
+- 월간 구독 서비스
 
 ### 1.3 핵심 개념
 
@@ -317,10 +319,30 @@ const authorization = 'Basic ' + Buffer.from(TOSS_SECRET_KEY + ':').toString('ba
 
 ### 7.2 환경별 키
 
-| 환경 | 키 접두어 | 용도 |
-|------|----------|------|
-| 테스트 | `test_ck_...`, `test_sk_...` | 개발 및 테스트 (실제 결제 없음) |
-| 라이브 | `live_ck_...`, `live_sk_...` | 실제 운영 환경 |
+| 환경 | 키 접두어 | 용도 | 특징 |
+|------|----------|------|------|
+| 테스트 | `test_ck_...`, `test_sk_...` | 개발 및 테스트 | 실제 결제 없음, 무제한 테스트 가능 |
+| 라이브 | `live_ck_...`, `live_sk_...` | 실제 운영 환경 | 실제 결제 발생, 수수료 발생 |
+
+### 7.3 키 관리 베스트 프랙티스
+
+**환경별 키 분리**:
+```bash
+# 개발 환경
+NEXT_PUBLIC_TOSS_CLIENT_KEY=test_ck_...
+TOSS_SECRET_KEY=test_sk_...
+
+# 운영 환경
+NEXT_PUBLIC_TOSS_CLIENT_KEY=live_ck_...
+TOSS_SECRET_KEY=live_sk_...
+```
+
+**보안 체크리스트**:
+- ✅ 시크릿 키는 서버 환경 변수에만 저장
+- ✅ 클라이언트 코드에 시크릿 키 노출 금지
+- ✅ Git 저장소에 시크릿 키 커밋 금지
+- ✅ 환경별 키 분리 관리
+- ✅ 정기적인 키 로테이션 (권장)
 
 ---
 
@@ -355,29 +377,332 @@ active ──(사용자 취소 신청)──> cancellation_pending
 
 | 메서드 | 엔드포인트 | 용도 |
 |--------|-----------|------|
-| `POST` | `/v1/billing/authorizations/issue` | 빌링키 발급 승인 ⚠️ |
+| `POST` | `/v1/billing/authorizations/issue` | 빌링키 발급 승인 (SDK 방식) |
+| `POST` | `/v1/billing/authorizations/card` | 빌링키 직접 발급 (API 방식) |
+| `DELETE` | `/v1/billing/{billingKey}` | 빌링키 삭제 (퀵계좌이체만 지원) |
 
-**⚠️ 중요**: 빌링키 삭제 API는 공식 가이드에 미제공됩니다. 상태값만 DB에서 관리하세요.
+**⚠️ 중요**: 
+- 카드 자동결제의 경우 빌링키 삭제 API 미제공 (상태값만 DB에서 관리)
+- 퀵계좌이체 자동결제는 빌링키 삭제 API 지원
 
 ### 9.2 결제 관련
 
 | 메서드 | 엔드포인트 | 용도 |
 |--------|-----------|------|
 | `POST` | `/v1/billing/{billingKey}` | 빌링키로 결제 (Idempotency-Key 필수 권장) |
+| `POST` | `/v1/payments/{paymentKey}/cancel` | 결제 취소 |
+
+### 9.3 웹훅 관련
+
+| 이벤트 타입 | 설명 | 처리 방법 |
+|-------------|------|-----------|
+| `BILLING_DELETED` | 빌링키 삭제 알림 | 구독 상태를 'expired'로 변경 |
+| `PAYMENT_STATUS_CHANGED` | 결제 상태 변경 | 결제 결과에 따른 구독 상태 업데이트 |
+
+### 9.4 API 버전별 차이점
+
+| 기능 | v1 API | v2 API | 비고 |
+|------|--------|--------|------|
+| 빌링키 발급 | `/v1/billing/authorizations/issue` | `/v1/billing/authorizations/card` | v2는 직접 발급 |
+| 퀵계좌이체 | 지원 | 지원 | v2에서 새로 추가 |
+| 빌링키 삭제 | 미지원 | 지원 (퀵계좌이체만) | 카드 자동결제는 미지원 |
+| 웹훅 | 기본 지원 | 확장 지원 | v2에서 더 많은 이벤트 |
+
+**권장사항**: 최신 API 버전(v2) 사용을 권장하며, 개발자센터에서 API 버전을 확인할 수 있습니다.
 
 ---
 
-## 10. 환경 변수
+## 10. 퀵계좌이체 자동결제 (선택사항)
+
+### 10.1 퀵계좌이체 자동결제란?
+
+**퀵계좌이체 자동결제**는 구매자가 계좌를 한 번만 등록하면, 별도의 본인인증 없이 간편하게 정기 결제를 진행할 수 있는 방식입니다.
+
+**특징**:
+- 계좌 등록 후 자동결제 가능
+- 빌링키 삭제 API 지원 (카드 자동결제와 차이점)
+- `BILLING_DELETED` 웹훅으로 실시간 해지 알림
+
+### 10.2 퀵계좌이체 빌링키 발급
+
+**클라이언트 (계좌 등록 요청)**:
+
+```html
+<script src="https://js.tosspayments.com/v2"></script>
+<script>
+  const tossPayments = TossPayments('YOUR_CLIENT_KEY');
+  const payment = tossPayments.payment();
+
+  // 퀵계좌이체 빌링키 발급 요청
+  payment.requestBillingAuth({
+    method: "TRANSFER", // 퀵계좌이체
+    customerKey: crypto.randomUUID(),
+    successUrl: window.location.origin + '/subscription/success',
+    failUrl: window.location.origin + '/subscription/fail',
+    customerEmail: 'user@example.com',
+    customerName: '홍길동',
+  });
+</script>
+```
+
+**서버 (빌링키 발급 승인)**:
+
+```typescript
+// successUrl로 리다이렉트 후 처리
+const response = await fetch(
+  'https://api.tosspayments.com/v1/billing/authorizations/issue',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Basic ' + Buffer.from(process.env.TOSS_SECRET_KEY + ':').toString('base64'),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      authKey: authKey,
+      customerKey: customerKey,
+    }),
+  }
+);
+
+const { billingKey } = await response.json();
+```
+
+### 10.3 퀵계좌이체 빌링키 삭제
+
+**빌링키 삭제 API**:
+
+```typescript
+// DELETE /v1/billing/{billingKey}
+const response = await fetch(
+  `https://api.tosspayments.com/v1/billing/${billingKey}`,
+  {
+    method: 'DELETE',
+    headers: {
+      'Authorization': 'Basic ' + Buffer.from(process.env.TOSS_SECRET_KEY + ':').toString('base64'),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      billingKey: billingKey
+    }),
+  }
+);
+```
+
+**BILLING_DELETED 웹훅 처리**:
+
+```typescript
+// POST /api/webhooks/toss
+export async function POST(req: Request) {
+  const webhook = await req.json();
+  
+  if (webhook.eventType === 'BILLING_DELETED') {
+    const { billingKey } = webhook.data;
+    
+    // 구독 상태를 'expired'로 변경
+    await supabase
+      .from('subscriptions')
+      .update({ status: 'expired' })
+      .eq('billing_key', billingKey);
+  }
+  
+  return Response.json({ success: true });
+}
+```
+
+---
+
+## 11. 웹훅 처리
+
+### 11.1 웹훅 설정
+
+**개발자센터에서 웹훅 등록**:
+1. 개발자센터 > 웹훅 메뉴 접속
+2. `BILLING_DELETED`, `PAYMENT_STATUS_CHANGED` 이벤트 선택
+3. 웹훅 수신 엔드포인트 URL 등록
+
+### 11.1.1 웹훅 보안 검증
+
+**웹훅 서명 검증** (권장):
+
+```typescript
+import crypto from 'crypto';
+
+export async function POST(req: Request) {
+  const body = await req.text();
+  const signature = req.headers.get('x-toss-signature');
+  
+  // 웹훅 서명 검증
+  const expectedSignature = crypto
+    .createHmac('sha256', process.env.WEBHOOK_SECRET!)
+    .update(body)
+    .digest('hex');
+  
+  if (signature !== expectedSignature) {
+    return Response.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+  
+  const webhook = JSON.parse(body);
+  // 웹훅 처리 로직...
+}
+```
+
+**중요**: 웹훅 서명 검증을 통해 악의적인 요청을 차단하세요.
+
+### 11.2 BILLING_DELETED 웹훅 처리
+
+**빌링키 삭제 시 수신되는 웹훅**:
+
+```json
+{
+  "eventType": "BILLING_DELETED",
+  "createdAt": "2024-12-01T00:00:00.000000",
+  "data": {
+    "billingKey": "wm60xF900HXZRzReBluSSgJriVX7d7rS0oyslw4zRwg"
+  }
+}
+```
+
+**처리 로직**:
+
+```typescript
+// POST /api/webhooks/toss
+export async function POST(req: Request) {
+  const webhook = await req.json();
+  
+  if (webhook.eventType === 'BILLING_DELETED') {
+    const { billingKey } = webhook.data;
+    
+    // 1. 해당 빌링키의 구독 상태를 'expired'로 변경
+    await supabase
+      .from('subscriptions')
+      .update({ status: 'expired' })
+      .eq('billing_key', billingKey);
+    
+    // 2. 사용자의 Pro 상태 해제
+    await supabase
+      .from('users')
+      .update({ is_pro: false })
+      .eq('customer_key', subscription.customer_key);
+    
+    // 3. 사용자에게 알림 발송
+    await sendNotification({
+      type: 'billing_deleted',
+      message: '결제 정보가 삭제되어 구독이 해지되었습니다.'
+    });
+  }
+  
+  return Response.json({ success: true });
+}
+```
+
+### 11.3 PAYMENT_STATUS_CHANGED 웹훅 처리
+
+**결제 상태 변경 시 수신되는 웹훅**:
+
+```json
+{
+  "eventType": "PAYMENT_STATUS_CHANGED",
+  "createdAt": "2022-01-01T00:00:00.000000",
+  "data": {
+    "paymentKey": "payment_key_123",
+    "orderId": "order_123",
+    "status": "DONE",
+    "approvedAt": "2022-01-01T00:00:00+09:00"
+  }
+}
+```
+
+**처리 로직**:
+
+```typescript
+if (webhook.eventType === 'PAYMENT_STATUS_CHANGED') {
+  const { paymentKey, orderId, status } = webhook.data;
+  
+  if (status === 'DONE') {
+    // 결제 성공 처리
+    await handlePaymentSuccess(paymentKey, orderId);
+  } else if (status === 'ABORTED') {
+    // 결제 실패 처리
+    await handlePaymentFailure(paymentKey, orderId);
+  }
+}
+```
+
+---
+
+## 12. 에러 처리 및 해결방법
+
+### 12.1 주요 에러 코드
+
+| 에러 코드 | 설명 | 해결 방법 |
+|-----------|------|-----------|
+| `UNAUTHORIZED_KEY` | API 키 오류 | 클라이언트 키와 시크릿 키 매칭 확인 |
+| `NOT_SUPPORTED_METHOD` | 자동결제 계약 미완료 | 토스페이먼츠 고객센터 문의 |
+| `NOT_MATCHES_CUSTOMER_KEY` | customerKey 불일치 | customerKey와 billingKey 매칭 확인 |
+| `PAY_PROCESS_CANCELED` | 사용자 취소 | 사용자에게 취소 확인 메시지 표시 |
+| `PAY_PROCESS_ABORTED` | 결제 실패 | 결제 정보 재확인 요청 |
+| `REJECT_CARD_COMPANY` | 카드사 거절 | 카드 정보 또는 한도 확인 |
+
+### 12.2 에러 처리 구현
+
+```typescript
+async function handlePaymentError(error: any) {
+  switch (error.code) {
+    case 'UNAUTHORIZED_KEY':
+      console.error('API 키 오류:', error.message);
+      // 관리자에게 알림 발송
+      break;
+      
+    case 'NOT_SUPPORTED_METHOD':
+      console.error('자동결제 계약 필요:', error.message);
+      // 토스페이먼츠 고객센터 연락 안내
+      break;
+      
+    case 'NOT_MATCHES_CUSTOMER_KEY':
+      console.error('CustomerKey 불일치:', error.message);
+      // 빌링키 재발급 프로세스 안내
+      break;
+      
+    case 'PAY_PROCESS_CANCELED':
+      // 사용자 취소 - 정상적인 케이스
+      break;
+      
+    case 'PAY_PROCESS_ABORTED':
+      console.error('결제 실패:', error.message);
+      // 사용자에게 결제 정보 확인 요청
+      break;
+      
+    case 'REJECT_CARD_COMPANY':
+      console.error('카드사 거절:', error.message);
+      // 카드 정보 또는 한도 확인 안내
+      break;
+      
+    default:
+      console.error('알 수 없는 에러:', error);
+      // 일반적인 에러 처리
+  }
+}
+```
+
+---
+
+## 13. 환경 변수
 
 ```bash
 # 토스페이먼츠
 NEXT_PUBLIC_TOSS_CLIENT_KEY=test_ck_...  # 클라이언트용 (SDK 초기화)
 TOSS_SECRET_KEY=test_sk_...              # 서버용 (API 호출)
+
+# 웹훅 보안
+WEBHOOK_SECRET=your_webhook_secret       # 웹훅 서명 검증용
+
+# Supabase Cron
+SUPABASE_CRON_REQUEST_SECRET=your_cron_secret  # Cron 요청 인증용
 ```
 
 ---
 
-## 11. 필수 패키지
+## 14. 필수 패키지
 
 ```bash
 npm install @tosspayments/tosspayments-sdk
@@ -385,7 +710,7 @@ npm install @tosspayments/tosspayments-sdk
 
 ---
 
-## 12. 주의사항 및 베스트 프랙티스
+## 15. 주의사항 및 베스트 프랙티스
 
 ### ✅ 반드시 지켜야 할 사항
 
@@ -441,9 +766,9 @@ npm install @tosspayments/tosspayments-sdk
 
 ---
 
-## 13. 참고 자료
+## 16. 참고 자료
 
-### 13.1 공식 문서
+### 16.1 공식 문서
 - [자동결제(빌링) 이해하기](https://docs.tosspayments.com/guides/v2/billing.md)
 - [자동결제(빌링) 결제창 연동하기](https://docs.tosspayments.com/guides/v2/billing/integration.md)
 - [구독 결제 서비스 구현하기 (1) 빌링키 발급](https://docs.tosspayments.com/blog/subscription-service-1.md)
@@ -451,5 +776,5 @@ npm install @tosspayments/tosspayments-sdk
 - [Basic 인증과 Bearer 인증](https://docs.tosspayments.com/blog/everything-about-basic-bearer-auth.md)
 - [시크릿 키 베스트 프랙티스](https://docs.tosspayments.com/blog/secret-key-best-practice.md)
 
-### 13.2 테스트
+### 16.2 테스트
 - [회원가입, 사업자번호 없이 결제 테스트하기](https://docs.tosspayments.com/blog/how-to-test-toss-payments.md)
