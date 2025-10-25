@@ -1,7 +1,7 @@
-# Clerk Google Authentication Guide
+# Clerk Authentication Guide
 
 ## 개요
-Clerk를 사용한 Next.js 15 (App Router) Google OAuth 인증 및 사용자 관리 가이드
+Clerk를 사용한 Next.js 15 (App Router) 인증 및 사용자 관리 가이드
 
 ---
 
@@ -59,7 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ---
 
-## 4. Google 로그인 UI 컴포넌트
+## 4. 로그인 UI 컴포넌트
 
 ### 4.1 기본 컴포넌트
 
@@ -98,12 +98,11 @@ export default function Header() {
 
 ## 5. Clerk Dashboard 설정
 
-### 5.1 Google OAuth 활성화
+### 5.1 Google 소셜 로그인 활성화
 1. [Clerk Dashboard](https://dashboard.clerk.com/) 로그인
 2. Application 선택
 3. **User & Authentication** > **Social Connections**
-4. **Google** 활성화
-5. 자동 생성된 OAuth 키 사용 또는 커스텀 앱 연결
+4. 원하는 소셜 로그인 방식 활성화
 
 ### 5.2 환경 변수
 Clerk가 자동으로 키를 생성하므로 별도로 설정할 필요 없음
@@ -307,5 +306,5 @@ CLERK_WEBHOOK_SECRET=whsec_...                 # Webhook 서명 검증용
 - [Clerk Next.js Quickstart](https://clerk.com/docs/quickstarts/nextjs)
 - [Clerk Dashboard](https://dashboard.clerk.com/)
 - [Clerk Webhook Guide](https://clerk.com/docs/integrations/webhooks)
-- [Google OAuth Setup](https://clerk.com/blog/raw/nextjs-google-authentication)
+- [Clerk 소셜 로그인 설정](https://clerk.com/docs/authentication/social-connections)
 - [Clerk AI Prompts](https://clerk.com/docs/guides/development/ai-prompts)
