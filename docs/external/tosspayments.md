@@ -10,16 +10,27 @@
 ### 1.1 개념
 **자동결제(빌링)**는 고객이 최초 1회 결제 정보를 등록하면, 이후 별도 인증 없이 자동으로 결제되는 방식입니다.
 
-**⚠️ 중요**: 자동결제 API는 토스페이먼츠와 **추가 계약이 필요한 기능**입니다. 사용 전 반드시 계약을 완료해야 합니다.
+**⚠️ 중요**:
+- 자동결제 API는 토스페이먼츠와 **추가 계약이 필요한 기능**입니다. 사용 전 반드시 계약을 완료해야 합니다.
+- **정기 구독형 서비스가 아니라면 정책적으로 자동결제 사용이 제한**되니 유의하세요.
+- 문의: 토스페이먼츠 고객센터(1544-7772, support@tosspayments.com)
 
-### 1.2 사용 케이스
+### 1.2 지원 결제 수단
+
+토스페이먼츠는 현재 **신용·체크카드 자동결제만 지원**합니다. 구매자의 카드 번호, 유효기간과 카드 소유자의 생년월일 또는 사업자번호가 필요합니다.
+
+**지원하지 않는 결제 수단**:
+- 간편결제: 토스페이, 카카오페이, 네이버페이 등 국내 간편결제 미지원
+- 해외 간편결제: PayPal(페이팔) 등 미지원
+
+### 1.3 사용 케이스
 - 구독형 서비스 (OTT, 음악 스트리밍)
 - 정기 배송
 - 월간 멤버십
 - 정기 기부금
 - 월간 구독 서비스
 
-### 1.3 핵심 개념
+### 1.4 핵심 개념
 
 | 용어 | 설명 |
 |------|------|
@@ -29,9 +40,34 @@
 
 ---
 
-## 2. 구독 결제 플로우
+## 2. 구독 서비스 구축 방법
 
-### 2.1 전체 흐름
+### 2.1 직접 구축 필요
+구독 서비스는 **API를 사용해서 직접 구축**해야 합니다. 1달 주기로 결제가 필요한 상품이면 1달마다 `customerKey`, 빌링키, 금액을 설정해서 카드 자동결제 승인 API를 호출하면 됩니다.
+
+### 2.2 구독 취소/변경 처리
+- **구독 취소**: 다음 결제일에 구독을 취소한 구매자의 빌링키, `customerKey`로 카드 자동결제 승인 API를 호출하지 않으면 됩니다.
+- **금액 변경**: 카드 자동결제 승인 API를 호출할 때 `amount` 파라미터를 변경된 결제 금액으로 설정하면 됩니다.
+- **주기 변경**: 카드 자동결제 승인 API를 호출하는 주기를 변경해주세요.
+
+### 2.3 모바일 연동
+자동결제(빌링)는 JavaScript SDK 뿐만 아니라, React Native와 Flutter를 위한 공식 SDK를 제공하여 모바일 환경에 쉽게 연동할 수 있습니다.
+
+- **JavaScript SDK**: 웹 기반 환경(웹뷰 포함)에서 사용합니다.
+- **React Native SDK**: `@tosspayments/widget-sdk-react-native` 패키지를 통해 네이티브 성능으로 연동합니다.
+- **Flutter SDK**: `tosspayments_widget_sdk_flutter` 패키지를 통해 네이티브 성능으로 연동합니다.
+
+### 2.4 빌링키 관리
+- **빌링키 조회 API**: 발급된 빌링키를 조회하는 API는 제공되지 않습니다. 빌링키 발급 이후 반드시 안전하게 저장하세요.
+- **빌링키 분실**: 빌링키를 잃어버렸다면 구매자에게 다시 결제 정보를 받아서 같은 카드에 새로운 빌링키를 발급받아주세요.
+- **중복 발급**: 카드 하나에 여러 개의 빌링키를 중복으로 발급할 수 있어요. 빌링키 중복 발급을 방지하는 방법은 없습니다.
+- **카드 재발급/만료**: 새로운 카드 정보로 빌링키를 다시 발급받으세요. 빌링키를 갱신하는 별도 과정은 없습니다.
+
+---
+
+## 3. 구독 결제 플로우
+
+### 3.1 전체 흐름
 
 ```
 1단계: 빌링키 발급
@@ -45,9 +81,9 @@
 
 ---
 
-## 3. 1단계: 빌링키 발급
+## 4. 1단계: 빌링키 발급
 
-### 3.1 클라이언트 (빌링키 발급 요청)
+### 4.1 클라이언트 (빌링키 발급 요청)
 
 **SDK v2 사용**:
 
@@ -71,12 +107,12 @@
 - `successUrl`: 빌링키 발급 성공 시 리다이렉트 URL
 - `failUrl`: 빌링키 발급 실패 시 리다이렉트 URL
 
-### 3.2 사용자 동작
+### 4.2 사용자 동작
 1. 토스페이먼츠 결제창 표시
 2. 카드 정보 입력 (카드 번호, 유효기간, CVC)
 3. 카드사 인증 (간편 비밀번호 또는 SMS)
 
-### 3.3 서버 (빌링키 승인)
+### 4.3 서버 (빌링키 승인)
 
 **successUrl로 리다이렉트 후 처리**:
 
@@ -113,7 +149,7 @@ const { billingKey } = await response.json();
 
 ---
 
-## 4. 2단계: 최초 결제
+## 5. 2단계: 최초 결제
 
 빌링키 발급 직후 즉시 첫 결제를 실행합니다.
 
@@ -156,9 +192,9 @@ if (response.ok) {
 
 ---
 
-## 5. 3단계: 정기 결제 (스케줄링)
+## 6. 3단계: 정기 결제 (스케줄링)
 
-### 5.1 Supabase Cron 설정
+### 6.1 Supabase Cron 설정
 
 **Supabase SQL Editor에서 실행**:
 
@@ -180,7 +216,7 @@ SELECT cron.schedule(
 - Supabase Cron은 UTC 시간대 사용
 - 한국 시간 02:00 = UTC 전날 17:00
 
-### 5.2 정기 결제 API 구현
+### 6.2 정기 결제 API 구현
 
 **엔드포인트**: `POST /api/cron/process-subscriptions`
 
@@ -214,7 +250,7 @@ export async function POST(req: Request) {
 }
 ```
 
-### 5.3 결제 처리 로직
+### 6.3 결제 처리 로직
 
 ```typescript
 async function processPayment(subscription) {
@@ -259,9 +295,9 @@ async function processPayment(subscription) {
 
 ---
 
-## 6. 4단계: 구독 관리
+## 7. 4단계: 구독 관리
 
-### 6.1 구독 취소
+### 7.1 구독 취소
 
 ```typescript
 // 사용자가 취소 신청
@@ -273,26 +309,39 @@ async function processPayment(subscription) {
 
 ```typescript
 async function handleCancellation(subscription) {
-  // 1. 구독 상태 변경
+  // 1. 토스페이먼츠 빌링키 삭제 API 호출
+  await fetch(
+    `https://api.tosspayments.com/v1/billing-key/remove`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from(process.env.TOSS_SECRET_KEY + ':').toString('base64'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        billingKey: subscription.billing_key,
+      }),
+    }
+  );
+
+  // 2. 구독 상태 변경
   await supabase
     .from('subscriptions')
     .update({ status: 'expired' })
     .eq('id', subscription.id);
 
-  // 2. Pro 상태 해제
+  // 3. Pro 상태 해제
   await supabase
     .from('users')
     .update({ is_pro: false })
     .eq('clerk_user_id', subscription.customer_key);
 
-  // ⚠️ 주의: 빌링키는 삭제하지 않음
-  // - 토스페이먼츠 공식 가이드에 빌링키 삭제 API 미제공
-  // - DB에서 상태값만 'expired'로 관리
-  // - 재구독 시 새로운 빌링키 발급 필요
+  // ✅ 중요: 빌링키 삭제 API를 호출하여 고객의 결제 정보를 안전하게 제거합니다.
+  // - 재구독 시 새로운 빌링키 발급이 필요합니다.
 }
 ```
 
-### 6.2 취소 철회
+### 7.2 취소 철회
 
 ```typescript
 // 취소 예정 상태에서 철회
@@ -302,9 +351,9 @@ async function handleCancellation(subscription) {
 
 ---
 
-## 7. 인증 방식 (Basic Auth)
+## 8. 인증 방식 (Basic Auth)
 
-### 7.1 시크릿 키 인코딩
+### 8.1 시크릿 키 인코딩
 
 토스페이먼츠 API는 **Basic 인증** 방식을 사용합니다.
 
@@ -317,14 +366,14 @@ const authorization = 'Basic ' + Buffer.from(TOSS_SECRET_KEY + ':').toString('ba
 - Base64로 인코딩
 - 절대 클라이언트에 노출 금지
 
-### 7.2 환경별 키
+### 8.2 환경별 키
 
 | 환경 | 키 접두어 | 용도 | 특징 |
 |------|----------|------|------|
 | 테스트 | `test_ck_...`, `test_sk_...` | 개발 및 테스트 | 실제 결제 없음, 무제한 테스트 가능 |
 | 라이브 | `live_ck_...`, `live_sk_...` | 실제 운영 환경 | 실제 결제 발생, 수수료 발생 |
 
-### 7.3 키 관리 베스트 프랙티스
+### 8.3 키 관리 베스트 프랙티스
 
 **환경별 키 분리**:
 ```bash
@@ -346,9 +395,9 @@ TOSS_SECRET_KEY=live_sk_...
 
 ---
 
-## 8. 구독 상태 관리
+## 9. 구독 상태 관리
 
-### 8.1 구독 상태
+### 9.1 구독 상태
 
 | 상태 | 코드 | 설명 | 다음 액션 |
 |------|------|------|-----------|
@@ -357,7 +406,7 @@ TOSS_SECRET_KEY=live_sk_...
 | 만료 | `expired` | 해지 완료 | 재구독 시 빌링키 재발급 |
 | 실패 | `failed` | 결제 실패로 해지 | 재구독 시 빌링키 재발급 |
 
-### 8.2 상태 전이
+### 9.2 상태 전이
 
 ```
 active ──(사용자 취소 신청)──> cancellation_pending
@@ -371,50 +420,50 @@ active ──(사용자 취소 신청)──> cancellation_pending
 
 ---
 
-## 9. 주요 API 엔드포인트
+## 10. 주요 API 엔드포인트
 
-### 9.1 빌링키 관련
+### 10.1 빌링키 관련
 
 | 메서드 | 엔드포인트 | 용도 |
 |--------|-----------|------|
 | `POST` | `/v1/billing/authorizations/issue` | 빌링키 발급 승인 (SDK 방식) |
 | `POST` | `/v1/billing/authorizations/card` | 빌링키 직접 발급 (API 방식) |
-| `DELETE` | `/v1/billing/{billingKey}` | 빌링키 삭제 (퀵계좌이체만 지원) |
+| `POST` | `/v1/billing-key/remove` | 빌링키 삭제 (카드/계좌 공통) |
 
-**⚠️ 중요**: 
-- 카드 자동결제의 경우 빌링키 삭제 API 미제공 (상태값만 DB에서 관리)
-- 퀵계좌이체 자동결제는 빌링키 삭제 API 지원
+**✅ 중요**: 
+- 이제 카드 자동결제도 빌링키 삭제 API를 공식적으로 지원합니다.
+- 구독 해지 시 `POST /v1/billing-key/remove`를 호출하여 사용자 정보를 안전하게 제거하는 것이 좋습니다.
 
-### 9.2 결제 관련
+### 10.2 결제 관련
 
 | 메서드 | 엔드포인트 | 용도 |
 |--------|-----------|------|
 | `POST` | `/v1/billing/{billingKey}` | 빌링키로 결제 (Idempotency-Key 필수 권장) |
 | `POST` | `/v1/payments/{paymentKey}/cancel` | 결제 취소 |
 
-### 9.3 웹훅 관련
+### 10.3 웹훅 관련
 
 | 이벤트 타입 | 설명 | 처리 방법 |
 |-------------|------|-----------|
 | `BILLING_DELETED` | 빌링키 삭제 알림 | 구독 상태를 'expired'로 변경 |
 | `PAYMENT_STATUS_CHANGED` | 결제 상태 변경 | 결제 결과에 따른 구독 상태 업데이트 |
 
-### 9.4 API 버전별 차이점
+### 10.4 API 버전별 차이점
 
 | 기능 | v1 API | v2 API | 비고 |
 |------|--------|--------|------|
 | 빌링키 발급 | `/v1/billing/authorizations/issue` | `/v1/billing/authorizations/card` | v2는 직접 발급 |
 | 퀵계좌이체 | 지원 | 지원 | v2에서 새로 추가 |
-| 빌링키 삭제 | 미지원 | 지원 (퀵계좌이체만) | 카드 자동결제는 미지원 |
+| 빌링키 삭제 | 지원 | 지원 | 카드, 계좌 모두 삭제 가능 |
 | 웹훅 | 기본 지원 | 확장 지원 | v2에서 더 많은 이벤트 |
 
 **권장사항**: 최신 API 버전(v2) 사용을 권장하며, 개발자센터에서 API 버전을 확인할 수 있습니다.
 
 ---
 
-## 10. 퀵계좌이체 자동결제 (선택사항)
+## 11. 퀵계좌이체 자동결제 (선택사항)
 
-### 10.1 퀵계좌이체 자동결제란?
+### 11.1 퀵계좌이체 자동결제란?
 
 **퀵계좌이체 자동결제**는 구매자가 계좌를 한 번만 등록하면, 별도의 본인인증 없이 간편하게 정기 결제를 진행할 수 있는 방식입니다.
 
@@ -423,7 +472,7 @@ active ──(사용자 취소 신청)──> cancellation_pending
 - 빌링키 삭제 API 지원 (카드 자동결제와 차이점)
 - `BILLING_DELETED` 웹훅으로 실시간 해지 알림
 
-### 10.2 퀵계좌이체 빌링키 발급
+### 11.2 퀵계좌이체 빌링키 발급
 
 **클라이언트 (계좌 등록 요청)**:
 
@@ -467,16 +516,18 @@ const response = await fetch(
 const { billingKey } = await response.json();
 ```
 
-### 10.3 퀵계좌이체 빌링키 삭제
+### 11.3 빌링키 삭제
+
+카드, 퀵계좌이체 모두 빌링키 삭제가 가능하며, 동일한 API 엔드포인트를 사용합니다.
 
 **빌링키 삭제 API**:
 
 ```typescript
-// DELETE /v1/billing/{billingKey}
+// POST /v1/billing-key/remove
 const response = await fetch(
-  `https://api.tosspayments.com/v1/billing/${billingKey}`,
+  `https://api.tosspayments.com/v1/billing-key/remove`,
   {
-    method: 'DELETE',
+    method: 'POST',
     headers: {
       'Authorization': 'Basic ' + Buffer.from(process.env.TOSS_SECRET_KEY + ':').toString('base64'),
       'Content-Type': 'application/json',
@@ -487,6 +538,8 @@ const response = await fetch(
   }
 );
 ```
+
+구독 해지 시 이 API를 호출하는 로직은 **7.1 구독 취소** 섹션을 참고하세요.
 
 **BILLING_DELETED 웹훅 처리**:
 
@@ -511,16 +564,16 @@ export async function POST(req: Request) {
 
 ---
 
-## 11. 웹훅 처리
+## 12. 웹훅 처리
 
-### 11.1 웹훅 설정
+### 12.1 웹훅 설정
 
 **개발자센터에서 웹훅 등록**:
 1. 개발자센터 > 웹훅 메뉴 접속
 2. `BILLING_DELETED`, `PAYMENT_STATUS_CHANGED` 이벤트 선택
 3. 웹훅 수신 엔드포인트 URL 등록
 
-### 11.1.1 웹훅 보안 검증
+### 12.1.1 웹훅 보안 검증
 
 **웹훅 서명 검증** (권장):
 
@@ -548,7 +601,7 @@ export async function POST(req: Request) {
 
 **중요**: 웹훅 서명 검증을 통해 악의적인 요청을 차단하세요.
 
-### 11.2 BILLING_DELETED 웹훅 처리
+### 12.2 BILLING_DELETED 웹훅 처리
 
 **빌링키 삭제 시 수신되는 웹훅**:
 
@@ -595,7 +648,7 @@ export async function POST(req: Request) {
 }
 ```
 
-### 11.3 PAYMENT_STATUS_CHANGED 웹훅 처리
+### 12.3 PAYMENT_STATUS_CHANGED 웹훅 처리
 
 **결제 상태 변경 시 수신되는 웹훅**:
 
@@ -630,9 +683,9 @@ if (webhook.eventType === 'PAYMENT_STATUS_CHANGED') {
 
 ---
 
-## 12. 에러 처리 및 해결방법
+## 13. 에러 처리 및 해결방법
 
-### 12.1 주요 에러 코드
+### 13.1 주요 에러 코드
 
 | 에러 코드 | 설명 | 해결 방법 |
 |-----------|------|-----------|
@@ -643,7 +696,7 @@ if (webhook.eventType === 'PAYMENT_STATUS_CHANGED') {
 | `PAY_PROCESS_ABORTED` | 결제 실패 | 결제 정보 재확인 요청 |
 | `REJECT_CARD_COMPANY` | 카드사 거절 | 카드 정보 또는 한도 확인 |
 
-### 12.2 에러 처리 구현
+### 13.2 에러 처리 구현
 
 ```typescript
 async function handlePaymentError(error: any) {
@@ -686,7 +739,7 @@ async function handlePaymentError(error: any) {
 
 ---
 
-## 13. 환경 변수
+## 14. 환경 변수
 
 ```bash
 # 토스페이먼츠
@@ -702,7 +755,7 @@ SUPABASE_CRON_REQUEST_SECRET=your_cron_secret  # Cron 요청 인증용
 
 ---
 
-## 14. 필수 패키지
+## 15. 필수 패키지
 
 ```bash
 npm install @tosspayments/tosspayments-sdk
@@ -710,7 +763,7 @@ npm install @tosspayments/tosspayments-sdk
 
 ---
 
-## 15. 주의사항 및 베스트 프랙티스
+## 16. 주의사항 및 베스트 프랙티스
 
 ### ✅ 반드시 지켜야 할 사항
 
@@ -736,10 +789,9 @@ npm install @tosspayments/tosspayments-sdk
 6. **authKey 유효 시간**
    - 빌링키 발급 승인은 **짧은 시간 내** 완료 (발급 후 즉시 처리 권장)
 
-7. **결제 실패 처리**
-   - ⚠️ 결제 실패 시 **빌링키 삭제하지 않음** (삭제 API 미제공)
-   - DB에서 구독 상태만 'failed'로 변경
-   - 사용자에게 실패 알림
+7. **구독 취소 처리**
+   - ✅ 구독 해지 시에는 **빌링키 삭제 API를 호출**하여 고객의 결제 정보를 안전하게 제거합니다.
+   - 결제 실패 시에는 빌링키를 바로 삭제하기보다, 유저에게 알리고 재결제를 유도한 뒤 특정 횟수 이상 실패 시 삭제하는 정책을 고려할 수 있습니다.
 
 8. **멱등성 보장**
    - 모든 결제 요청에 `Idempotency-Key` 헤더 추가 권장
@@ -766,9 +818,9 @@ npm install @tosspayments/tosspayments-sdk
 
 ---
 
-## 16. 참고 자료
+## 17. 참고 자료
 
-### 16.1 공식 문서
+### 17.1 공식 문서
 - [자동결제(빌링) 이해하기](https://docs.tosspayments.com/guides/v2/billing.md)
 - [자동결제(빌링) 결제창 연동하기](https://docs.tosspayments.com/guides/v2/billing/integration.md)
 - [구독 결제 서비스 구현하기 (1) 빌링키 발급](https://docs.tosspayments.com/blog/subscription-service-1.md)
@@ -776,5 +828,5 @@ npm install @tosspayments/tosspayments-sdk
 - [Basic 인증과 Bearer 인증](https://docs.tosspayments.com/blog/everything-about-basic-bearer-auth.md)
 - [시크릿 키 베스트 프랙티스](https://docs.tosspayments.com/blog/secret-key-best-practice.md)
 
-### 16.2 테스트
+### 17.2 테스트
 - [회원가입, 사업자번호 없이 결제 테스트하기](https://docs.tosspayments.com/blog/how-to-test-toss-payments.md)
