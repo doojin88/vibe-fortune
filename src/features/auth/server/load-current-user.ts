@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { User } from "@supabase/supabase-js";
-import { createSupabaseServerClient } from "@/lib/supabase/server-client";
+import { createClient } from "@/lib/supabase/server-client";
 import type { CurrentUserSnapshot } from "../types";
 
 const mapUser = (user: User) => ({
@@ -12,7 +12,7 @@ const mapUser = (user: User) => ({
 });
 
 export const loadCurrentUser = async (): Promise<CurrentUserSnapshot> => {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createClient();
   const result = await supabase.auth.getUser();
   const user = result.data.user;
 

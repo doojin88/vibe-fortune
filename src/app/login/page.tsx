@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { createClient } from "@/lib/supabase/browser-client";
 import { useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
 
 type LoginPageProps = {
@@ -40,7 +40,7 @@ export default function LoginPage({ params }: LoginPageProps) {
       event.preventDefault();
       setIsSubmitting(true);
       setErrorMessage(null);
-      const supabase = getSupabaseBrowserClient();
+      const supabase = createClient();
 
       try {
         const result = await supabase.auth.signInWithPassword({

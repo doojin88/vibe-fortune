@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { match, P } from "ts-pattern";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { createClient } from "@/lib/supabase/browser-client";
 import type {
   CurrentUserContextValue,
   CurrentUserSnapshot,
@@ -32,7 +32,7 @@ export const CurrentUserProvider = ({
 
   const refresh = useCallback(async () => {
     setSnapshot((prev) => ({ status: "loading", user: prev.user }));
-    const supabase = getSupabaseBrowserClient();
+    const supabase = createClient();
 
     try {
       const result = await supabase.auth.getUser();

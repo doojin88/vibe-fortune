@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { createClient } from "@/lib/supabase/browser-client";
 import { useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
 
 const defaultFormState = {
@@ -63,7 +63,7 @@ export default function SignupPage({ params }: SignupPageProps) {
         return;
       }
 
-      const supabase = getSupabaseBrowserClient();
+      const supabase = createClient();
 
       try {
         const result = await supabase.auth.signUp({
