@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server-client';
+import { auth } from '@clerk/nextjs/server';
 import { geminiClient } from '@/lib/gemini/client';
 import { generateSajuPrompt } from '@/lib/gemini/prompts';
 import { sajuInputSchema, type SajuInput } from '@/features/saju/types/input';
@@ -18,12 +19,9 @@ export async function createSajuTest(
     const validatedInput = sajuInputSchema.parse(input);
 
     // 2. 사용자 인증 확인
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const { userId } = await auth();
+    
+    if (!userId) {
       return { success: false, error: '로그인이 필요합니다' };
     }
 
@@ -34,10 +32,11 @@ export async function createSajuTest(
     const { text: result } = await geminiClient.generateContent(prompt);
 
     // 5. 데이터베이스 저장
+    const supabase = await createClient();
     const { data: sajuTest, error: dbError } = await supabase
       .from('saju_tests')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         name: validatedInput.name,
         birth_date: validatedInput.birthDate,
         birth_time: validatedInput.birthTime || null,

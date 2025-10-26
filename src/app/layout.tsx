@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Providers from "./providers";
-import { loadCurrentUser } from "@/features/auth/server/load-current-user";
-import { CurrentUserProvider } from "@/features/auth/context/current-user-context";
 
 export const metadata: Metadata = {
   title: 'Vibe Fortune - AI 기반 사주분석 서비스',
@@ -14,20 +12,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const currentUser = await loadCurrentUser();
-
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className="antialiased font-sans">
         <Providers>
-          <CurrentUserProvider initialState={currentUser}>
-            {children}
-          </CurrentUserProvider>
+          {children}
         </Providers>
       </body>
     </html>

@@ -1,25 +1,24 @@
 import { createClient } from '@/lib/supabase/server-client';
+import { auth } from '@clerk/nextjs/server';
 import type { SajuTestResult } from '@/features/saju/types/result';
 import 'server-only';
 
 export async function getSajuTest(
   id: string
 ): Promise<SajuTestResult | null> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { userId } = await auth();
+  
+  if (!userId) {
     return null;
   }
+
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from('saju_tests')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   if (error || !data) {
