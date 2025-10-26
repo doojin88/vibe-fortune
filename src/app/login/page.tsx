@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,8 +11,7 @@ type LoginPageProps = {
   params: Promise<Record<string, never>>;
 };
 
-export default function LoginPage({ params }: LoginPageProps) {
-  void params;
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refresh, isAuthenticated } = useCurrentUser();
@@ -141,5 +140,15 @@ export default function LoginPage({ params }: LoginPageProps) {
         </figure>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage({ params }: LoginPageProps) {
+  void params;
+  
+  return (
+    <Suspense fallback={<div>로딩 중...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -17,7 +17,19 @@ export async function createSajuTest(
 ): Promise<CreateSajuTestResult> {
   try {
     // 1. 입력 검증
-    const validatedInput = sajuInputSchema.parse(input);
+    let validatedInput: SajuInput;
+    try {
+      validatedInput = sajuInputSchema.parse(input);
+    } catch (error) {
+      if (error instanceof Error && 'issues' in error) {
+        const zodError = error as any;
+        const firstIssue = zodError.issues[0];
+        if (firstIssue?.path[0] === 'birthDate') {
+          return { success: false, error: '생년월일을 YYYY-MM-DD 형식(예: 2000-01-01)으로 입력해주세요' };
+        }
+      }
+      return { success: false, error: '입력 정보를 확인해주세요' };
+    }
 
     // 2. 사용자 인증 확인
     const { userId } = await auth();

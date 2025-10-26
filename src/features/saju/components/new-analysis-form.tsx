@@ -102,7 +102,7 @@ export function NewAnalysisForm() {
             <Input
               id="birthDate"
               {...register('birthDate')}
-              placeholder="YYYY-MM-DD (예: 1990-01-15)"
+              placeholder="YYYY-MM-DD (예: 2000-01-01)"
               disabled={isLoading}
               className={errors.birthDate ? 'border-destructive' : ''}
             />
