@@ -19,16 +19,16 @@ export async function createSajuTest(
     // 1. 입력 검증
     const validatedInput = sajuInputSchema.parse(input);
 
-    // 2. 사용자 인증 확인 및 사용자 정보 생성
+    // 2. 사용자 인증 확인
     const { userId } = await auth();
     
     if (!userId) {
       return { success: false, error: '로그인이 필요합니다' };
     }
 
-    // 사용자가 users 테이블에 존재하는지 확인하고, 없으면 생성
-    const supabase = await createClient();
-    const { data: existingUser } = await supabase
+    // 3. 사용자 정보 생성 또는 확인
+    const adminSupabase = createAdminClient();
+    const { data: existingUser } = await adminSupabase
       .from('users')
       .select('id')
       .eq('id', userId)
@@ -45,15 +45,14 @@ export async function createSajuTest(
       const name = [user.lastName, user.firstName].filter(Boolean).join('') || 
                   email.split('@')[0] || 'Unknown';
 
-      // Admin 클라이언트로 사용자 생성
-      const adminSupabase = createAdminClient();
+      // 사용자 생성
       const { error: userError } = await adminSupabase
         .from('users')
         .insert({
           id: userId,
           email,
           name,
-        });
+        } as any);
 
       if (userError) {
         console.error('사용자 생성 실패:', userError);
@@ -61,14 +60,14 @@ export async function createSajuTest(
       }
     }
 
-    // 3. AI 프롬프트 생성
+    // 4. AI 프롬프트 생성
     const prompt = generateSajuPrompt(validatedInput);
 
-    // 4. Gemini API 호출
+    // 5. Gemini API 호출
     const { text: result } = await geminiClient.generateContent(prompt);
 
-    // 5. 데이터베이스 저장
-    const { data: sajuTest, error: dbError } = await supabase
+    // 6. 데이터베이스 저장
+    const { data: sajuTest, error: dbError } = await adminSupabase
       .from('saju_tests')
       .insert({
         user_id: userId,
@@ -77,7 +76,7 @@ export async function createSajuTest(
         birth_time: validatedInput.birthTime || null,
         gender: validatedInput.gender,
         result,
-      })
+      } as any)
       .select()
       .single();
 
@@ -86,9 +85,15 @@ export async function createSajuTest(
       return { success: false, error: '분석 결과 저장에 실패했습니다' };
     }
 
-    // 6. 상세 페이지로 리다이렉트
-    redirect(`/dashboard/results/${sajuTest.id}`);
+    // 7. 상세 페이지로 리다이렉트 (redirect는 정상적인 동작이므로 catch하지 않음)
+    redirect(`/dashboard/results/${(sajuTest as any).id}`);
   } catch (error) {
+    // redirect()는 NEXT_REDIRECT를 던지므로 정상적인 동작
+    if (error && typeof error === 'object' && 'digest' in error && 
+        typeof error.digest === 'string' && error.digest.startsWith('NEXT_REDIRECT')) {
+      throw error; // redirect를 다시 던져서 정상 처리
+    }
+
     console.error('사주분석 생성 실패:', error);
 
     if (error instanceof Error) {
