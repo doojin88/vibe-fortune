@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { format } from 'date-fns';
 import { sajuInputSchema, type SajuInput } from '../types/input';
 import { createSajuTest } from '../actions/create-saju-test';
 import { useToast } from '@/hooks/use-toast';
@@ -12,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { DatePicker } from '@/components/ui/date-picker';
 import { TimePicker } from '@/components/ui/time-picker';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,7 +38,6 @@ export function NewAnalysisForm() {
     },
   });
 
-  const watchBirthDate = watch('birthDate');
   const watchGender = watch('gender');
 
   const onSubmit = async (data: SajuInput) => {
@@ -102,17 +99,12 @@ export function NewAnalysisForm() {
             <Label htmlFor="birthDate">
               생년월일 <span className="text-destructive">*</span>
             </Label>
-            <DatePicker
-              value={watchBirthDate ? new Date(watchBirthDate) : undefined}
-              onChange={(date) => {
-                if (date) {
-                  setValue('birthDate', format(date, 'yyyy-MM-dd'), {
-                    shouldValidate: true,
-                  });
-                }
-              }}
-              placeholder="생년월일을 선택해주세요"
+            <Input
+              id="birthDate"
+              {...register('birthDate')}
+              placeholder="YYYY-MM-DD (예: 1990-01-15)"
               disabled={isLoading}
+              className={errors.birthDate ? 'border-destructive' : ''}
             />
             {errors.birthDate && (
               <p className="text-sm text-destructive">
