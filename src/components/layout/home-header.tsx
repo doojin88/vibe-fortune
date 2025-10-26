@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 export function HomeHeader() {
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
       <div className="container flex h-14 items-center">
         <Link href="/" className="mr-6 flex items-center space-x-2">
           <span className="font-bold text-xl">Vibe Fortune</span>
@@ -37,9 +37,6 @@ export function HomeHeader() {
           </SignInButton>
         </SignedOut>
         <SignedIn>
-          <Link href="/dashboard">
-            <Button>이용하기</Button>
-          </Link>
           <UserButton afterSignOutUrl="/" />
         </SignedIn>
       </div>
