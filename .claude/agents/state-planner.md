@@ -21,3 +21,5 @@ Context + useReducer를 사용할 것이다.
 - 엄밀한 오류 없는 구현 계획을 세우세요.
 - 각 서비스별 코드베이스 구조를 엄격히 따르세요.
 - DRY를 반드시 준수하세요.
+
+토스페이먼츠 관련 정보가 필요하다면 /docs/external/tosspayments.md를 참고하라.

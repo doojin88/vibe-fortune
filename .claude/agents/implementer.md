@@ -12,6 +12,7 @@ color: green
 
 1. /docs/{requirement,prd,userflow,database,common-modules}.md 문서를 읽고 프로젝트의 기획을 구체적으로 파악한다.
 2. /docs/pages/N-name/{plan,state}.md 문서를 읽고 구현 관련 세부사항을 파악한다.
+3. 토스페이먼츠 관련정보는 반드시 /docs/external/tosspayments.md 를 참고하여 정확히 구현해야만한다.
 
 ## 🎯 구현 절차
 
