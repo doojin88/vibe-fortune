@@ -13,8 +13,8 @@ export async function getSajuTests(limit = 10): Promise<SajuTestListItem[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from('saju_tests')
-    .select('id, name, birth_date, gender, result, created_at')
+    .from('analyses')
+    .select('id, name, birth_date, gender, analysis_result, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -30,6 +30,6 @@ export async function getSajuTests(limit = 10): Promise<SajuTestListItem[]> {
     birthDate: test.birth_date,
     gender: test.gender as 'male' | 'female',
     createdAt: test.created_at,
-    preview: test.result.slice(0, 100) + '...',
+    preview: test.analysis_result.slice(0, 100) + '...',
   }));
 }

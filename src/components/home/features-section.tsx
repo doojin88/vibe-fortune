@@ -1,4 +1,4 @@
-import { Sparkles, UserCircle, History, FileText } from 'lucide-react';
+import { Sparkles, UserCircle, History, Zap } from 'lucide-react';
 import { FeatureCard } from './feature-card';
 
 const features = [
@@ -6,7 +6,7 @@ const features = [
     icon: Sparkles,
     title: 'AI 기반 전문 분석',
     description:
-      'Google Gemini API를 활용한 20년 경력 사주상담사 수준의 분석',
+      'Gemini API를 활용한 20년 경력 사주상담사 수준의 분석',
   },
   {
     icon: UserCircle,
@@ -19,9 +19,9 @@ const features = [
     description: '과거 분석 결과를 언제든 다시 확인 가능',
   },
   {
-    icon: FileText,
-    title: '마크다운 렌더링',
-    description: '보기 쉽고 구조화된 분석 결과 제공',
+    icon: Zap,
+    title: '실시간 스트리밍',
+    description: 'AI 분석 결과를 실시간으로 확인하며 기다림 없는 경험',
   },
 ];
 

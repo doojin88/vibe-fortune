@@ -4,6 +4,7 @@ import { SajuTestResult } from '@/features/saju/types/result';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDate, formatDateTime } from '@/lib/utils/date';
+import { Sparkles } from 'lucide-react';
 
 type AnalysisInfoCardProps = {
   sajuTest: SajuTestResult;
@@ -48,6 +49,17 @@ export function AnalysisInfoCard({ sajuTest }: AnalysisInfoCardProps) {
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground min-w-[80px]">분석 날짜</span>
           <span className="text-sm">{formatDateTime(sajuTest.createdAt)}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground min-w-[80px]">분석 유형</span>
+          <Badge
+            variant={sajuTest.modelUsed === 'pro' ? 'default' : 'secondary'}
+            className="gap-1"
+          >
+            {sajuTest.modelUsed === 'pro' && <Sparkles className="h-3 w-3" />}
+            {sajuTest.modelUsed === 'pro' ? 'Pro 고급 분석' : '기본 분석'}
+          </Badge>
         </div>
       </CardContent>
     </Card>

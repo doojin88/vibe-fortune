@@ -1,43 +1,60 @@
-import { Check } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PricingCard } from './pricing-card';
 
-const benefits = [
-  '무제한 사주분석',
-  '이력 관리',
-  'AI 기반 상세 분석',
-  '광고 없음',
+const pricingPlans = [
+  {
+    title: '무료',
+    price: '₩0',
+    description: '누구나 무료로 시작',
+    features: [
+      '초기 3회 분석 가능',
+      '기본 AI 분석 (gemini-2.5-flash)',
+      '분석 이력 저장',
+      '마크다운 결과 복사',
+    ],
+    ctaText: '무료로 시작하기',
+    ctaLink: '/dashboard',
+    isPopular: false,
+    isPro: false,
+  },
+  {
+    title: 'Pro',
+    price: '₩9,900',
+    description: '고급 분석과 더 많은 혜택',
+    features: [
+      '월 10회 분석 가능',
+      '고급 AI 분석 (gemini-2.5-pro)',
+      '직업운, 사업운 분석',
+      '월별 운세 및 길일 분석',
+      '우선 지원',
+    ],
+    ctaText: 'Pro 시작하기',
+    ctaLink: '/subscription',
+    isPopular: true,
+    isPro: true,
+  },
 ];
 
 export function PricingSection() {
   return (
     <section id="pricing" className="bg-gray-50 px-6 py-20">
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-6xl">
         <h2 className="mb-12 text-center text-4xl font-bold text-gray-900">
           요금 안내
         </h2>
-        <div className="flex justify-center">
-          <Card className="w-full max-w-md border-2 border-indigo-200 shadow-xl">
-            <CardHeader className="text-center">
-              <CardTitle className="text-3xl font-bold text-indigo-600">
-                완전 무료
-              </CardTitle>
-              <CardDescription className="text-lg">
-                구독 없이 누구나 무료로 이용 가능
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                {benefits.map((benefit) => (
-                  <li key={benefit} className="flex items-center gap-3">
-                    <div className="flex-shrink-0">
-                      <Check className="h-5 w-5 text-green-600" />
-                    </div>
-                    <span className="text-gray-700">{benefit}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+        <div className="grid gap-8 md:grid-cols-2 max-w-4xl mx-auto">
+          {pricingPlans.map((plan) => (
+            <PricingCard
+              key={plan.title}
+              title={plan.title}
+              price={plan.price}
+              description={plan.description}
+              features={plan.features}
+              ctaText={plan.ctaText}
+              ctaLink={plan.ctaLink}
+              isPopular={plan.isPopular}
+              isPro={plan.isPro}
+            />
+          ))}
         </div>
       </div>
     </section>

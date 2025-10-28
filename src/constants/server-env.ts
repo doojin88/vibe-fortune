@@ -6,6 +6,8 @@ const serverEnvSchema = z.object({
   GEMINI_API_KEY: z.string().min(1).optional(),
   CLERK_SECRET_KEY: z.string().min(1).optional(),
   CLERK_WEBHOOK_SECRET: z.string().min(1).optional(), // 배포 후에만 필요
+  TOSS_SECRET_KEY: z.string().min(1).optional(),
+  CRON_SECRET: z.string().min(1).optional(),
 });
 
 const _serverEnv = serverEnvSchema.safeParse({
@@ -13,6 +15,8 @@ const _serverEnv = serverEnvSchema.safeParse({
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
   CLERK_WEBHOOK_SECRET: process.env.CLERK_WEBHOOK_SECRET,
+  TOSS_SECRET_KEY: process.env.TOSS_SECRET_KEY,
+  CRON_SECRET: process.env.CRON_SECRET,
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

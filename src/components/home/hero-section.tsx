@@ -8,7 +8,7 @@ export function HeroSection() {
   return (
     <section
       id="hero"
-      className="relative flex min-h-[600px] items-center justify-center bg-linear-to-br from-indigo-50 via-white to-purple-50 px-6 py-20"
+      className="relative flex min-h-[600px] items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 px-6 py-20 md:py-32"
     >
       <div className="mx-auto max-w-4xl text-center">
         <h1 className="mb-6 text-5xl font-bold tracking-tight text-gray-900 md:text-6xl lg:text-7xl">
@@ -22,14 +22,14 @@ export function HeroSection() {
           <SignedOut>
             <SignInButton mode="modal">
               <Button size="lg" className="text-lg px-8 py-6">
-                시작하기
+                무료로 시작하기
               </Button>
             </SignInButton>
           </SignedOut>
           <SignedIn>
             <Link href="/dashboard">
               <Button size="lg" className="text-lg px-8 py-6">
-                대시보드로 이동
+                이용하기
               </Button>
             </Link>
           </SignedIn>

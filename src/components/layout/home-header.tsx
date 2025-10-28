@@ -31,14 +31,19 @@ export function HomeHeader() {
             FAQ
           </Link>
         </nav>
-        <SignedOut>
-          <SignInButton mode="modal">
-            <Button>시작하기</Button>
-          </SignInButton>
-        </SignedOut>
-        <SignedIn>
-          <UserButton afterSignOutUrl="/" />
-        </SignedIn>
+        <div className="flex items-center gap-4">
+          <SignedOut>
+            <SignInButton mode="modal">
+              <Button>시작하기</Button>
+            </SignInButton>
+          </SignedOut>
+          <SignedIn>
+            <Link href="/dashboard">
+              <Button variant="outline">이용하기</Button>
+            </Link>
+            <UserButton afterSignOutUrl="/" />
+          </SignedIn>
+        </div>
       </div>
     </header>
   );

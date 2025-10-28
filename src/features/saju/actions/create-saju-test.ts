@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server-client';
 import { createAdminClient } from '@/lib/supabase/admin-client';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { geminiClient } from '@/lib/gemini/client';
-import { generateSajuPrompt } from '@/lib/gemini/prompts';
+import { generateSajuPrompt, generateProSajuPrompt } from '@/lib/gemini/prompts';
 import { sajuInputSchema, type SajuInput } from '@/features/saju/types/input';
 
 export type CreateSajuTestResult =
@@ -38,13 +38,15 @@ export async function createSajuTest(
       return { success: false, error: '로그인이 필요합니다' };
     }
 
-    // 3. 사용자 정보 생성 또는 확인
+    // 3. 사용자 정보 생성 또는 확인 (구독 상태 포함)
     const adminSupabase = createAdminClient();
-    const { data: existingUser } = await adminSupabase
+    const { data: existingUser } = await (adminSupabase as any)
       .from('users')
-      .select('id')
+      .select('id, subscription_status, test_count')
       .eq('id', userId)
       .single();
+
+    let userInfo: { id: string; subscription_status: string; test_count: number } | null = existingUser;
 
     if (!existingUser) {
       // 사용자 정보 가져오기
@@ -54,32 +56,49 @@ export async function createSajuTest(
       }
 
       const email = user.emailAddresses[0]?.emailAddress || '';
-      const name = [user.lastName, user.firstName].filter(Boolean).join('') || 
+      const name = [user.lastName, user.firstName].filter(Boolean).join('') ||
                   email.split('@')[0] || 'Unknown';
 
-      // 사용자 생성
-      const { error: userError } = await adminSupabase
+      // 사용자 생성 (초기 구독 상태: free, 검사 횟수: 3)
+      const { data: newUser, error: userError } = await (adminSupabase as any)
         .from('users')
         .insert({
           id: userId,
           email,
           name,
-        } as any);
+          subscription_status: 'free',
+          test_count: 3,
+        })
+        .select('id, subscription_status, test_count')
+        .single();
 
-      if (userError) {
+      if (userError || !newUser) {
         console.error('사용자 생성 실패:', userError);
         return { success: false, error: '사용자 정보 생성에 실패했습니다' };
       }
+
+      userInfo = newUser;
     }
 
-    // 4. AI 프롬프트 생성
-    const prompt = generateSajuPrompt(validatedInput);
+    // 4. 잔여 횟수 확인
+    if (!userInfo || userInfo.test_count <= 0) {
+      return {
+        success: false,
+        error: '검사 횟수가 부족합니다. 구독 페이지로 이동하시겠습니까?',
+      };
+    }
 
-    // 5. Gemini API 호출
+    // 5. 구독 상태에 따른 모델 선택
+    const isPro = userInfo.subscription_status === 'pro' || userInfo.subscription_status === 'cancelled';
+    const prompt = isPro
+      ? generateProSajuPrompt(validatedInput)
+      : generateSajuPrompt(validatedInput);
+
+    // 6. Gemini API 호출
     const { text: result } = await geminiClient.generateContent(prompt);
 
-    // 6. 데이터베이스 저장
-    const { data: sajuTest, error: dbError } = await adminSupabase
+    // 7. 데이터베이스 저장 (사용 모델 정보 포함)
+    const { data: sajuTest, error: dbError } = await (adminSupabase as any)
       .from('saju_tests')
       .insert({
         user_id: userId,
@@ -88,7 +107,8 @@ export async function createSajuTest(
         birth_time: validatedInput.birthTime || null,
         gender: validatedInput.gender,
         result,
-      } as any)
+        model_used: isPro ? 'pro' : 'flash',
+      })
       .select()
       .single();
 
@@ -97,7 +117,13 @@ export async function createSajuTest(
       return { success: false, error: '분석 결과 저장에 실패했습니다' };
     }
 
-    // 7. 상세 페이지로 리다이렉트 (redirect는 정상적인 동작이므로 catch하지 않음)
+    // 8. 횟수 차감
+    await (adminSupabase as any)
+      .from('users')
+      .update({ test_count: userInfo.test_count - 1 })
+      .eq('id', userId);
+
+    // 9. 상세 페이지로 리다이렉트 (redirect는 정상적인 동작이므로 catch하지 않음)
     redirect(`/dashboard/results/${(sajuTest as any).id}`);
   } catch (error) {
     // redirect()는 NEXT_REDIRECT를 던지므로 정상적인 동작

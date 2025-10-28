@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { label: '대시보드', href: '/dashboard' },
   { label: '새 검사', href: '/dashboard/new' },
+  { label: '구독 관리', href: '/subscription' },
 ];
 
 export function DashboardHeader() {

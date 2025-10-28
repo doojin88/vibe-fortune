@@ -3,15 +3,17 @@
 import { useState } from 'react';
 import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { Button } from '@/components/ui/button';
-import { Copy, Check } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Copy, Check, Sparkles, Info } from 'lucide-react';
 import { copyToClipboard } from '@/lib/utils/clipboard';
 import { useToast } from '@/hooks/use-toast';
 
 type AnalysisResultSectionProps = {
   result: string;
+  modelUsed: 'flash' | 'pro';
 };
 
-export function AnalysisResultSection({ result }: AnalysisResultSectionProps) {
+export function AnalysisResultSection({ result, modelUsed }: AnalysisResultSectionProps) {
   const [copyIcon, setCopyIcon] = useState<'copy' | 'check'>('copy');
   const { toast } = useToast();
 
@@ -56,6 +58,23 @@ export function AnalysisResultSection({ result }: AnalysisResultSectionProps) {
           결과 복사
         </Button>
       </div>
+
+      {modelUsed === 'pro' ? (
+        <Alert className="border-primary bg-primary/5">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <AlertDescription>
+            이 분석은 <strong>Pro 구독</strong>으로 생성된 고급 분석입니다.
+            직업운, 사업운, 월별 운세가 포함되어 있습니다.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            기본 분석 결과입니다. <strong>Pro 구독</strong> 시 더욱 상세한 분석을 받을 수 있습니다.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="border rounded-lg p-6">
         <MarkdownRenderer content={result} />

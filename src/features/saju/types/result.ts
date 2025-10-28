@@ -6,6 +6,7 @@ export type SajuTestResult = {
   birthTime: string | null;
   gender: 'male' | 'female';
   result: string; // 마크다운 텍스트
+  modelUsed: 'flash' | 'pro'; // 사용된 모델
   createdAt: string;
 };
 

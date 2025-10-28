@@ -34,6 +34,7 @@ export async function getSajuTest(
     birthTime: data.birth_time,
     gender: data.gender as 'male' | 'female',
     result: data.result,
+    modelUsed: (data.model_used as 'flash' | 'pro') || 'flash',
     createdAt: data.created_at,
   };
 }

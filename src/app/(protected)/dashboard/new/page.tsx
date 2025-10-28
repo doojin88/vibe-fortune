@@ -1,6 +1,9 @@
 import { NewAnalysisForm } from '@/features/saju/components/new-analysis-form';
+import { getSubscription } from '@/features/subscription/queries/get-subscription';
 
-export default function NewAnalysisPage() {
+export default async function NewAnalysisPage() {
+  const subscription = await getSubscription();
+
   return (
     <div className="container max-w-2xl mx-auto py-8">
       <div className="space-y-6">
@@ -10,7 +13,7 @@ export default function NewAnalysisPage() {
             분석하실 분의 정보를 입력해주세요
           </p>
         </div>
-        <NewAnalysisForm />
+        <NewAnalysisForm subscriptionInfo={subscription} />
       </div>
     </div>
   );

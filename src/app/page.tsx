@@ -5,6 +5,7 @@ import { HeroSection } from '@/components/home/hero-section';
 import { FeaturesSection } from '@/components/home/features-section';
 import { PricingSection } from '@/components/home/pricing-section';
 import { FAQSection } from '@/components/home/faq-section';
+import { Footer } from '@/components/home/footer';
 
 export default function HomePage() {
   return (
@@ -16,6 +17,7 @@ export default function HomePage() {
         <PricingSection />
         <FAQSection />
       </main>
+      <Footer />
     </div>
   );
 }

@@ -1,44 +1,46 @@
-"use client";
-
 import { type ReactNode } from "react";
-import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 import { DashboardHeader } from "@/components/layout/dashboard-header";
+import { DashboardSidebar } from "@/components/layout/dashboard-sidebar";
+import { MobileSidebar } from "@/components/layout/mobile-sidebar";
+import { getSubscription } from "@/features/subscription/queries/get-subscription";
 
 type ProtectedLayoutProps = {
   children: ReactNode;
 };
 
-export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
-  const { isSignedIn, isLoaded } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      router.push("/");
-    }
-  }, [isLoaded, isSignedIn, router]);
-
-  if (!isLoaded) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">로딩 중...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isSignedIn) {
-    return null;
-  }
+export default async function ProtectedLayout({ children }: ProtectedLayoutProps) {
+  // 구독 정보 조회
+  const subscription = await getSubscription();
 
   return (
-    <>
+    <div className="min-h-screen flex flex-col">
       <DashboardHeader />
-      {children}
-    </>
+      <div className="flex flex-1">
+        {/* 데스크톱 사이드바 */}
+        {subscription && (
+          <DashboardSidebar
+            userEmail={subscription.userEmail}
+            subscriptionStatus={subscription.status}
+            testCount={subscription.testCount}
+            nextBillingDate={subscription.nextBillingDate}
+          />
+        )}
+
+        {/* 메인 컨텐츠 */}
+        <main className="flex-1 p-4 md:p-8">
+          {children}
+        </main>
+      </div>
+
+      {/* 모바일 사이드바 */}
+      {subscription && (
+        <MobileSidebar
+          userEmail={subscription.userEmail}
+          subscriptionStatus={subscription.status}
+          testCount={subscription.testCount}
+          nextBillingDate={subscription.nextBillingDate}
+        />
+      )}
+    </div>
   );
 }
