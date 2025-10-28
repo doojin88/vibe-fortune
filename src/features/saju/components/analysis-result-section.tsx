@@ -7,13 +7,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Copy, Check, Sparkles, Info } from 'lucide-react';
 import { copyToClipboard } from '@/lib/utils/clipboard';
 import { useToast } from '@/hooks/use-toast';
+import { DeleteTestDialog } from './delete-test-dialog';
 
 type AnalysisResultSectionProps = {
   result: string;
   modelUsed: 'flash' | 'pro';
+  testId: string;
+  testName: string;
 };
 
-export function AnalysisResultSection({ result, modelUsed }: AnalysisResultSectionProps) {
+export function AnalysisResultSection({ result, modelUsed, testId, testName }: AnalysisResultSectionProps) {
   const [copyIcon, setCopyIcon] = useState<'copy' | 'check'>('copy');
   const { toast } = useToast();
 
@@ -43,20 +46,23 @@ export function AnalysisResultSection({ result, modelUsed }: AnalysisResultSecti
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">사주분석 결과</h2>
-        <Button
-          onClick={handleCopy}
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          aria-label="사주분석 결과 복사"
-        >
-          {copyIcon === 'copy' ? (
-            <Copy className="h-4 w-4" />
-          ) : (
-            <Check className="h-4 w-4" />
-          )}
-          결과 복사
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleCopy}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            aria-label="사주분석 결과 복사"
+          >
+            {copyIcon === 'copy' ? (
+              <Copy className="h-4 w-4" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
+            결과 복사
+          </Button>
+          <DeleteTestDialog testId={testId} testName={testName} />
+        </div>
       </div>
 
       {modelUsed === 'pro' ? (

@@ -18,7 +18,12 @@ export function ResultDetailClient({ sajuTest }: ResultDetailClientProps) {
       <main className="container mx-auto py-8 px-4 flex-1">
         <div className="max-w-4xl mx-auto space-y-6">
           <AnalysisInfoCard sajuTest={sajuTest} />
-          <AnalysisResultSection result={sajuTest.result} modelUsed={sajuTest.modelUsed} />
+          <AnalysisResultSection 
+            result={sajuTest.result} 
+            modelUsed={sajuTest.modelUsed}
+            testId={sajuTest.id}
+            testName={sajuTest.name}
+          />
           <NavigationButtons />
         </div>
       </main>
