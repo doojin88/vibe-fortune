@@ -16,4 +16,6 @@ color: orange
 
 `/docs/prd.md` 경로에 생성하라.
 
-토스페이먼츠 관련 정보가 필요하다면 /docs/external/tosspayments.md를 참고하라.
+clerk 관련 정보가 필요하다면 `/docs/external/clerk.md` 를 참고하라.
+gemini 관련 정보가 필요하다면 `/docs/external/gemini*.md` 를 참고하라.
+토스페이먼츠 관련 정보가 필요하다면 `/docs/external/tosspayments.md` 를 참고하라.

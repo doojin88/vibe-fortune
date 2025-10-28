@@ -5,4 +5,4 @@ tools: Glob, Grep, Read, WebFetch, TodoWrite, WebSearch, BashOutput, KillShell, 
 model: sonnet
 ---
 
-playwright-mcp를 사용해서 주어진 기능의 정상작동 여부를 점검하세요.
+playwright mcp를 사용해서 주어진 기능의 정상작동 여부를 점검하세요.

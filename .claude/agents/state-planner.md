@@ -22,4 +22,6 @@ Context + useReducer를 사용할 것이다.
 - 각 서비스별 코드베이스 구조를 엄격히 따르세요.
 - DRY를 반드시 준수하세요.
 
-토스페이먼츠 관련 정보가 필요하다면 /docs/external/tosspayments.md를 참고하라.
+clerk 관련 정보가 필요하다면 `/docs/external/clerk.md` 를 참고하라.
+gemini 관련 정보가 필요하다면 `/docs/external/gemini*.md` 를 참고하라.
+토스페이먼츠 관련 정보가 필요하다면 `/docs/external/tosspayments.md` 를 참고하라.
