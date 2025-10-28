@@ -20,14 +20,19 @@ export async function loadMoreTests(offset: number, limit = 10): Promise<LoadMor
 
     const supabase = await createClient();
     const { data, error } = await supabase
-      .from('analyses')
-      .select('id, name, birth_date, gender, analysis_result, created_at')
+      .from('saju_tests')
+      .select('id, name, birth_date, gender, result, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) {
-      console.error('더보기 조회 실패:', error);
+      console.error('더보기 조회 실패:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
       return { success: false, error: error.message };
     }
 
@@ -37,7 +42,7 @@ export async function loadMoreTests(offset: number, limit = 10): Promise<LoadMor
       birthDate: test.birth_date,
       gender: test.gender as 'male' | 'female',
       createdAt: test.created_at,
-      preview: test.analysis_result.slice(0, 100) + '...',
+      preview: test.result.slice(0, 100) + '...',
     }));
 
     return {

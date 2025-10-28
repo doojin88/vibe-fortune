@@ -56,8 +56,18 @@ export async function getSubscription(): Promise<SubscriptionInfo | null> {
     .eq('id', userId)
     .single();
 
-  if (userError || !user) {
-    console.error('사용자 정보 조회 실패:', userError);
+  if (userError) {
+    console.error('사용자 정보 조회 실패:', {
+      message: userError.message,
+      details: userError.details,
+      hint: userError.hint,
+      code: userError.code
+    });
+    return null;
+  }
+
+  if (!user) {
+    console.error('사용자 정보 조회 실패: 사용자를 찾을 수 없습니다.');
     return null;
   }
 
@@ -70,7 +80,12 @@ export async function getSubscription(): Promise<SubscriptionInfo | null> {
       .single();
 
     if (subError) {
-      console.error('구독 정보 조회 실패:', subError);
+      console.error('구독 정보 조회 실패:', {
+        message: subError.message,
+        details: subError.details,
+        hint: subError.hint,
+        code: subError.code
+      });
     }
 
     return {
@@ -119,8 +134,18 @@ export async function getRemainingTestCount(): Promise<number> {
     .eq('id', userId)
     .single();
 
-  if (error || !user) {
-    console.error('잔여 횟수 조회 실패:', error);
+  if (error) {
+    console.error('잔여 횟수 조회 실패:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
+    return 0;
+  }
+
+  if (!user) {
+    console.error('잔여 횟수 조회 실패: 사용자를 찾을 수 없습니다.');
     return 0;
   }
 
@@ -152,8 +177,18 @@ export async function isProSubscriber(): Promise<boolean> {
     .eq('id', userId)
     .single();
 
-  if (error || !user) {
-    console.error('구독 상태 조회 실패:', error);
+  if (error) {
+    console.error('구독 상태 조회 실패:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
+    return false;
+  }
+
+  if (!user) {
+    console.error('구독 상태 조회 실패: 사용자를 찾을 수 없습니다.');
     return false;
   }
 

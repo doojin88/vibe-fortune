@@ -21,8 +21,18 @@ export async function getSajuTest(
     .eq('user_id', userId)
     .single();
 
-  if (error || !data) {
-    console.error('사주분석 조회 실패:', error);
+  if (error) {
+    console.error('사주분석 조회 실패:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
+    return null;
+  }
+
+  if (!data) {
+    console.error('사주분석 조회 실패: 데이터를 찾을 수 없습니다.');
     return null;
   }
 
