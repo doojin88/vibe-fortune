@@ -5,48 +5,71 @@
 본 문서는 Vibe Fortune 프로젝트의 페이지 단위 개발을 시작하기 전에 구현해야 할 공통 모듈 및 로직을 정의합니다. 모든 공통 모듈은 특정 페이지에 의존적이지 않으며, 여러 페이지에서 재사용 가능하도록 설계됩니다.
 
 **작성 원칙:**
-- 문서(PRD, userflow, database)에 명시된 내용만 구현
+- 문서(PRD, userflow, database, tosspayments)에 명시된 내용만 구현
 - 오버엔지니어링 금지
 - 페이지 단위 병렬 개발이 가능하도록 코드 conflict 최소화
+
+**현재 상태:**
+- 기본 프로젝트 구조 완성 (Next.js 15, Supabase, Clerk)
+- 사주분석 핵심 기능 구현 완료
+- 구독 관리 기능 미구현
+
+**최근 변경사항 (2025-10-28):**
+- 구독 관리 기능 요구사항 추가
+- 토스페이먼츠 자동결제(빌링) 연동 필요
+- subscriptions, payments 테이블 추가
+- 정기 결제 및 자동 해지 Cron Job 필요
 
 ---
 
 ## 1. 데이터베이스 스키마 및 타입
 
-### 1.1 Supabase Database Types
+### 1.1 Supabase Database Types (업데이트 필요)
 
 **필요한 이유:**
-- 데이터베이스 테이블 스키마를 TypeScript 타입으로 정의하여 타입 안정성 확보
-- Supabase 클라이언트 사용 시 자동완성 및 타입 체크
-- users, saju_tests 테이블의 타입 정의 필요
+- 구독 관련 테이블(subscriptions, payments) 타입 정의 추가
+- users 테이블에 구독 관련 필드 추가
+- 타입 안정성 확보
+
+**현재 상태:**
+- ✅ 구현됨 (`src/lib/supabase/types.ts`)
+- ❌ 구독 관련 타입 누락
 
 **구현 방법:**
 ```typescript
-// src/lib/supabase/types.ts
+// src/lib/supabase/types.ts (업데이트)
 export type Database = {
   public: {
     Tables: {
       users: {
         Row: {
-          id: string;
+          id: string; // text (Clerk user ID)
           email: string;
           name: string;
+          subscription_status: 'free' | 'pro' | 'cancelled' | 'payment_failed';
+          test_count: number;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id: string;
           email: string;
           name: string;
+          subscription_status?: 'free' | 'pro' | 'cancelled' | 'payment_failed';
+          test_count?: number;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
           email?: string;
           name?: string;
-          created_at?: string;
+          subscription_status?: 'free' | 'pro' | 'cancelled' | 'payment_failed';
+          test_count?: number;
+          updated_at?: string;
         };
       };
-      saju_tests: {
+      analyses: {
         Row: {
           id: string;
           user_id: string;
@@ -54,7 +77,8 @@ export type Database = {
           birth_date: string;
           birth_time: string | null;
           gender: 'male' | 'female';
-          result: string;
+          analysis_result: string;
+          model_used: 'flash' | 'pro';
           created_at: string;
         };
         Insert: {
@@ -64,7 +88,8 @@ export type Database = {
           birth_date: string;
           birth_time?: string | null;
           gender: 'male' | 'female';
-          result: string;
+          analysis_result: string;
+          model_used: 'flash' | 'pro';
           created_at?: string;
         };
         Update: {
@@ -74,7 +99,92 @@ export type Database = {
           birth_date?: string;
           birth_time?: string | null;
           gender?: 'male' | 'female';
-          result?: string;
+          analysis_result?: string;
+          model_used?: 'flash' | 'pro';
+          created_at?: string;
+        };
+      };
+      subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          billing_key: string;
+          customer_key: string;
+          card_number: string | null;
+          card_type: string | null;
+          card_company: string | null;
+          status: 'active' | 'cancelled' | 'terminated' | 'payment_failed';
+          next_billing_date: string;
+          last_billing_date: string | null;
+          billing_key_deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          billing_key: string;
+          customer_key: string;
+          card_number?: string | null;
+          card_type?: string | null;
+          card_company?: string | null;
+          status?: 'active' | 'cancelled' | 'terminated' | 'payment_failed';
+          next_billing_date: string;
+          last_billing_date?: string | null;
+          billing_key_deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          billing_key?: string;
+          customer_key?: string;
+          card_number?: string | null;
+          card_type?: string | null;
+          card_company?: string | null;
+          status?: 'active' | 'cancelled' | 'terminated' | 'payment_failed';
+          next_billing_date?: string;
+          last_billing_date?: string | null;
+          billing_key_deleted_at?: string | null;
+          updated_at?: string;
+        };
+      };
+      payments: {
+        Row: {
+          id: string;
+          user_id: string;
+          subscription_id: string;
+          payment_key: string;
+          order_id: string;
+          amount: number;
+          status: 'done' | 'cancelled' | 'failed';
+          paid_at: string;
+          cancelled_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          subscription_id: string;
+          payment_key: string;
+          order_id: string;
+          amount: number;
+          status: 'done' | 'cancelled' | 'failed';
+          paid_at: string;
+          cancelled_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          subscription_id?: string;
+          payment_key?: string;
+          order_id?: string;
+          amount?: number;
+          status?: 'done' | 'cancelled' | 'failed';
+          paid_at?: string;
+          cancelled_at?: string | null;
           created_at?: string;
         };
       };
@@ -82,114 +192,221 @@ export type Database = {
   };
 };
 
-export type SajuTest = Database['public']['Tables']['saju_tests']['Row'];
 export type User = Database['public']['Tables']['users']['Row'];
+export type Analysis = Database['public']['Tables']['analyses']['Row'];
+export type Subscription = Database['public']['Tables']['subscriptions']['Row'];
+export type Payment = Database['public']['Tables']['payments']['Row'];
 ```
 
 **사용될 곳:**
 - Supabase 클라이언트 생성 시 제네릭 타입
 - 모든 데이터베이스 쿼리
 - Server Actions
-- 페이지 컴포넌트 props
+- 구독 관리 페이지
 
-**우선순위:** 최고 (P0) - 모든 데이터베이스 접근에 필수
+**우선순위:** 최고 (P0) - 구독 기능 개발 전 필수
 
 ---
 
-### 1.2 Supabase 마이그레이션 스크립트
+### 1.2 Supabase 마이그레이션 스크립트 (업데이트 필요)
 
 **필요한 이유:**
-- Supabase 데이터베이스 초기 테이블 및 RLS 정책 설정
-- 로컬 개발 환경 및 배포 환경 동일 스키마 보장
+- 구독 관련 테이블 추가 (subscriptions, payments)
+- users 테이블에 구독 필드 추가
+- Cron Job 설정
+
+**현재 상태:**
+- ✅ 기본 스키마 구현됨
+- ❌ 구독 관련 테이블 미구현
 
 **구현 방법:**
 ```sql
--- supabase/migrations/20251027000000_initial_schema.sql
--- users 테이블
-CREATE TABLE users (
-  id text PRIMARY KEY,
-  email text NOT NULL UNIQUE,
-  name text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT NOW()
+-- supabase/migrations/20251028000001_add_subscription_tables.sql
+
+-- 1. users 테이블에 구독 필드 추가
+ALTER TABLE users
+  ADD COLUMN subscription_status text NOT NULL DEFAULT 'free'
+    CHECK (subscription_status IN ('free', 'pro', 'cancelled', 'payment_failed')),
+  ADD COLUMN test_count integer NOT NULL DEFAULT 3 CHECK (test_count >= 0),
+  ADD COLUMN updated_at timestamptz NOT NULL DEFAULT NOW();
+
+COMMENT ON COLUMN users.subscription_status IS '구독 상태: free(초기 3회), pro(월 10회), cancelled(취소 예약), payment_failed(결제 실패)';
+COMMENT ON COLUMN users.test_count IS '잔여 검사 횟수';
+
+-- 2. subscriptions 테이블 생성
+CREATE TABLE subscriptions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id text NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  billing_key text NOT NULL,
+  customer_key text NOT NULL,
+  card_number text CHECK (card_number IS NULL OR length(card_number) = 4),
+  card_type text,
+  card_company text,
+  status text NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'cancelled', 'terminated', 'payment_failed')),
+  next_billing_date timestamptz NOT NULL,
+  last_billing_date timestamptz,
+  billing_key_deleted_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT NOW(),
+  updated_at timestamptz NOT NULL DEFAULT NOW(),
+  CONSTRAINT valid_billing_key_state CHECK (
+    (status = 'terminated' AND billing_key_deleted_at IS NOT NULL) OR
+    (status != 'terminated' AND billing_key_deleted_at IS NULL)
+  )
 );
 
--- saju_tests 테이블
-CREATE TABLE saju_tests (
+COMMENT ON TABLE subscriptions IS 'Pro 구독 정보 및 토스페이먼츠 빌링키';
+COMMENT ON COLUMN subscriptions.user_id IS '1:1 관계 (한 사용자당 최대 1개 구독)';
+COMMENT ON COLUMN subscriptions.billing_key IS '토스페이먼츠 빌링키 (암호화 권장)';
+COMMENT ON COLUMN subscriptions.customer_key IS 'UUID 형식 (유추 불가능)';
+COMMENT ON COLUMN subscriptions.status IS 'active(활성), cancelled(취소 예약), terminated(해지 완료), payment_failed(결제 실패)';
+
+-- 3. payments 테이블 생성
+CREATE TABLE payments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name text NOT NULL,
-  birth_date date NOT NULL,
-  birth_time text,
-  gender text NOT NULL CHECK (gender IN ('male', 'female')),
-  result text NOT NULL,
+  subscription_id uuid NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+  payment_key text NOT NULL,
+  order_id text NOT NULL UNIQUE,
+  amount integer NOT NULL CHECK (amount > 0),
+  status text NOT NULL CHECK (status IN ('done', 'cancelled', 'failed')),
+  paid_at timestamptz NOT NULL,
+  cancelled_at timestamptz CHECK (
+    (status = 'cancelled' AND cancelled_at IS NOT NULL) OR
+    (status != 'cancelled' AND cancelled_at IS NULL)
+  ),
   created_at timestamptz NOT NULL DEFAULT NOW()
 );
 
--- 인덱스
-CREATE INDEX idx_saju_tests_user_created
-  ON saju_tests(user_id, created_at DESC);
+COMMENT ON TABLE payments IS '결제 내역 (첫 결제 + 정기 결제)';
+COMMENT ON COLUMN payments.amount IS '결제 금액 (원 단위, 9900)';
+COMMENT ON COLUMN payments.status IS 'done(성공), cancelled(취소/환불), failed(실패)';
 
--- RLS 활성화
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE saju_tests ENABLE ROW LEVEL SECURITY;
+-- 4. 인덱스 생성
+CREATE INDEX idx_subscriptions_status ON subscriptions(status) WHERE status != 'terminated';
+CREATE INDEX idx_subscriptions_next_billing ON subscriptions(next_billing_date) WHERE status = 'active';
+CREATE INDEX idx_payments_user_id ON payments(user_id, created_at DESC);
+CREATE INDEX idx_payments_subscription_id ON payments(subscription_id, created_at DESC);
 
--- users 정책
-CREATE POLICY "users_select_own"
-  ON users FOR SELECT
-  USING (id = auth.uid());
+-- 5. RLS 활성화
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "users_insert_service"
-  ON users FOR INSERT
+-- 6. subscriptions RLS 정책
+CREATE POLICY "subscriptions_select_own"
+  ON subscriptions FOR SELECT
+  USING (user_id = auth.uid());
+
+CREATE POLICY "subscriptions_insert_service"
+  ON subscriptions FOR INSERT
   TO service_role
   WITH CHECK (true);
 
-CREATE POLICY "users_update_service"
-  ON users FOR UPDATE
+CREATE POLICY "subscriptions_update_service"
+  ON subscriptions FOR UPDATE
   TO service_role
   USING (true);
 
--- saju_tests 정책
-CREATE POLICY "saju_select_own"
-  ON saju_tests FOR SELECT
+-- 7. payments RLS 정책
+CREATE POLICY "payments_select_own"
+  ON payments FOR SELECT
   USING (user_id = auth.uid());
 
-CREATE POLICY "saju_insert_own"
-  ON saju_tests FOR INSERT
-  WITH CHECK (user_id = auth.uid());
+CREATE POLICY "payments_insert_service"
+  ON payments FOR INSERT
+  TO service_role
+  WITH CHECK (true);
+
+-- 8. updated_at 트리거
+CREATE TRIGGER update_users_updated_at
+  BEFORE UPDATE ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_subscriptions_updated_at
+  BEFORE UPDATE ON subscriptions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- 9. Cron Extension 활성화
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- 10. Vault에 Cron Secret 저장
+INSERT INTO vault.secrets (name, secret, description)
+VALUES (
+  'cron_secret',
+  'REPLACE_WITH_YOUR_SECURE_RANDOM_STRING',
+  'Secret for authenticating cron jobs'
+) ON CONFLICT (name) DO NOTHING;
+
+-- 11. Cron Job 함수
+CREATE OR REPLACE FUNCTION process_subscription_payments()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  PERFORM
+    net.http_post(
+      url := 'https://your-domain.com/api/subscription/process',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'X-Cron-Secret', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'cron_secret')
+      ),
+      body := jsonb_build_object(
+        'date', CURRENT_DATE::text
+      )
+    );
+END;
+$$;
+
+-- 12. Cron Job 등록 (매일 오전 2시)
+SELECT cron.schedule(
+  'process-subscription-payments',
+  '0 2 * * *',
+  'SELECT process_subscription_payments();'
+);
 ```
 
 **사용될 곳:**
 - Supabase 프로젝트 초기 세팅
-- 로컬 개발 환경 (supabase start)
+- 로컬 개발 환경
 
-**우선순위:** 최고 (P0) - 데이터베이스 없이는 개발 불가
+**우선순위:** 최고 (P0) - 구독 기능 개발 전 필수
 
 ---
 
-## 2. 환경 변수 관리
+## 2. 환경 변수 관리 (업데이트 필요)
 
 ### 2.1 서버 전용 환경 변수
 
-**필요한 이유:**
-- Gemini API 키, Supabase Service Role Key 등 민감 정보 관리
-- 클라이언트에 노출되면 안되는 환경 변수 타입 정의 및 검증
+**현재 상태:**
+- ✅ 구현됨 (`src/constants/server-env.ts`)
+- ❌ 토스페이먼츠 키 누락
 
 **구현 방법:**
 ```typescript
-// src/constants/server-env.ts
+// src/constants/server-env.ts (업데이트)
 import { z } from 'zod';
 import 'server-only';
 
 const serverEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   GEMINI_API_KEY: z.string().min(1),
-  CLERK_WEBHOOK_SECRET: z.string().min(1).optional(), // 배포 후에만 필요
+  CLERK_SECRET_KEY: z.string().min(1),
+  CLERK_WEBHOOK_SECRET: z.string().min(1).optional(),
+  TOSS_SECRET_KEY: z.string().min(1), // 추가
+  CRON_SECRET: z.string().min(1), // 추가
 });
 
 const _serverEnv = serverEnvSchema.safeParse({
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
   CLERK_WEBHOOK_SECRET: process.env.CLERK_WEBHOOK_SECRET,
+  TOSS_SECRET_KEY: process.env.TOSS_SECRET_KEY,
+  CRON_SECRET: process.env.CRON_SECRET,
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -203,290 +420,802 @@ export const serverEnv: ServerEnv = _serverEnv.data;
 ```
 
 **사용될 곳:**
-- Gemini API 호출 (Server Actions)
-- Clerk Webhook 처리
-- Supabase Service Role Client 생성
+- 토스페이먼츠 API 호출
+- Cron Job 인증
 
-**우선순위:** 최고 (P0) - AI 분석 기능에 필수
+**우선순위:** 최고 (P0)
 
 ---
 
-## 3. 공통 타입 정의
+### 2.2 클라이언트 환경 변수
 
-### 3.1 사주분석 입력 타입 및 Validation Schema
-
-**필요한 이유:**
-- 새 검사하기 폼 입력 데이터 타입 정의
-- 클라이언트/서버 양쪽에서 동일한 검증 로직 사용
+**현재 상태:**
+- ✅ 구현됨 (`src/constants/env.ts`)
+- ❌ 토스페이먼츠 클라이언트 키 누락
 
 **구현 방법:**
 ```typescript
-// src/features/saju/types/input.ts
-import { z } from 'zod';
-
-export const sajuInputSchema = z.object({
-  name: z.string().min(1, '성함을 입력해주세요').max(50, '성함은 50자 이하로 입력해주세요'),
-  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '올바른 날짜 형식(YYYY-MM-DD)을 입력해주세요'),
-  birthTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
-  birthTimeUnknown: z.boolean().default(false),
-  gender: z.enum(['male', 'female'], {
-    errorMap: () => ({ message: '성별을 선택해주세요' }),
-  }),
+// src/constants/env.ts (업데이트)
+const clientEnvSchema = z.object({
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
+  NEXT_PUBLIC_TOSS_CLIENT_KEY: z.string().min(1), // 추가
+  NEXT_PUBLIC_BASE_URL: z.string().url(), // 추가
 });
-
-export type SajuInput = z.infer<typeof sajuInputSchema>;
 ```
 
-**사용될 곳:**
-- 새 검사하기 페이지 폼 검증
-- Server Action 입력 검증
-- Gemini API 프롬프트 생성
-
-**우선순위:** 최고 (P0) - 사주분석 기능의 핵심
+**우선순위:** 최고 (P0)
 
 ---
 
-### 3.2 사주분석 결과 타입
+## 3. 토스페이먼츠 연동
+
+### 3.1 토스페이먼츠 SDK 초기화
 
 **필요한 이유:**
-- 데이터베이스에서 조회한 사주분석 데이터의 타입 정의
-- 컴포넌트 props 타입 체크
+- 구독 카드 등록 UI 제공
+- 본인인증 자동 처리
+- 빌링키 발급
 
 **구현 방법:**
 ```typescript
-// src/features/saju/types/result.ts
-export type SajuTestResult = {
-  id: string;
-  userId: string;
-  name: string;
-  birthDate: string;
-  birthTime: string | null;
-  gender: 'male' | 'female';
-  result: string; // 마크다운 텍스트
-  createdAt: string;
-};
+// src/lib/tosspayments/client.ts
+'use client';
 
-export type SajuTestListItem = Pick<
-  SajuTestResult,
-  'id' | 'name' | 'birthDate' | 'gender' | 'createdAt'
-> & {
-  preview: string; // result의 첫 100자
-};
-```
-
-**사용될 곳:**
-- 대시보드 이력 카드
-- 사주분석 상세 페이지
-- Server Components props
-
-**우선순위:** 높음 (P1)
-
----
-
-## 4. Supabase 클라이언트 유틸리티
-
-### 4.1 Supabase Browser Client 헬퍼
-
-**필요한 이유:**
-- 클라이언트 컴포넌트에서 Supabase 사용
-- 현재 코드베이스에 이미 일부 구현되어 있으나, Database 타입 업데이트 필요
-
-**구현 방법:**
-```typescript
-// src/lib/supabase/browser-client.ts
-import { createBrowserClient } from '@supabase/ssr';
-import type { Database } from './types';
+import { loadTossPayments } from '@tosspayments/tosspayments-sdk';
 import { env } from '@/constants/env';
 
-export function createClient() {
-  return createBrowserClient<Database>(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
-}
-```
+let tossPaymentsPromise: Promise<any> | null = null;
 
-**사용될 곳:**
-- 클라이언트 컴포넌트에서 데이터 조회 (거의 사용 안함, 주로 Server Components 사용)
-- React Query mutations (필요 시)
-
-**우선순위:** 중간 (P2) - Server Components 위주 사용
-
----
-
-### 4.2 Supabase Server Client 헬퍼
-
-**필요한 이유:**
-- Server Components와 Server Actions에서 Supabase 사용
-- 쿠키 기반 인증 세션 관리
-
-**구현 방법:**
-```typescript
-// src/lib/supabase/server-client.ts
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-import type { Database } from './types';
-import { env } from '@/constants/env';
-
-export async function createClient() {
-  const cookieStore = await cookies();
-
-  return createServerClient<Database>(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Server Component에서는 쿠키 설정 불가, 무시
-          }
-        },
-      },
-    }
-  );
-}
-```
-
-**사용될 곳:**
-- 모든 Server Components
-- Server Actions
-- 대시보드, 사주분석 상세 페이지 데이터 로딩
-
-**우선순위:** 최고 (P0) - 모든 데이터 접근에 필수
-
----
-
-### 4.3 Supabase Admin Client
-
-**필요한 이유:**
-- Clerk Webhook에서 RLS 우회하여 users 테이블 INSERT/UPDATE
-- Service Role Key 사용
-
-**구현 방법:**
-```typescript
-// src/lib/supabase/admin-client.ts
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from './types';
-import { serverEnv } from '@/constants/server-env';
-import { env } from '@/constants/env';
-import 'server-only';
-
-export function createAdminClient() {
-  return createClient<Database>(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    serverEnv.SUPABASE_SERVICE_ROLE_KEY,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    }
-  );
-}
-```
-
-**사용될 곳:**
-- Clerk Webhook 핸들러 (`/api/webhooks/clerk`)
-
-**우선순위:** 높음 (P1) - Webhook 구현에 필수
-
----
-
-## 5. Gemini API 연동
-
-### 5.1 Gemini API Client
-
-**필요한 이유:**
-- Google Gemini API 호출 로직 캡슐화
-- 에러 처리 및 재시도 로직 중앙화
-
-**구현 방법:**
-```typescript
-// src/lib/gemini/client.ts
-import { serverEnv } from '@/constants/server-env';
-import 'server-only';
-
-export type GeminiResponse = {
-  text: string;
-};
-
-export class GeminiClient {
-  private readonly apiKey: string;
-  private readonly baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  private readonly model = 'gemini-2.0-flash-exp';
-
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
+export async function getTossPayments() {
+  if (!tossPaymentsPromise) {
+    tossPaymentsPromise = loadTossPayments(env.NEXT_PUBLIC_TOSS_CLIENT_KEY);
   }
+  return tossPaymentsPromise;
+}
 
-  async generateContent(prompt: string): Promise<GeminiResponse> {
-    const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+export async function createPayment(customerKey: string) {
+  const tossPayments = await getTossPayments();
+  return tossPayments.payment({ customerKey });
+}
+```
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 4096,
+**사용될 곳:**
+- 구독 관리 페이지 (카드 등록)
+
+**우선순위:** 최고 (P0)
+
+---
+
+### 3.2 빌링키 발급 API
+
+**필요한 이유:**
+- authKey를 받아 빌링키 발급
+- Supabase에 빌링키 저장
+
+**구현 방법:**
+```typescript
+// src/app/api/subscription/confirm/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin-client';
+import { serverEnv } from '@/constants/server-env';
+import { auth } from '@clerk/nextjs/server';
+
+export async function POST(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { authKey, customerKey } = await request.json();
+
+    if (!authKey || !customerKey) {
+      return NextResponse.json(
+        { error: '필수 파라미터가 누락되었습니다.' },
+        { status: 400 }
+      );
+    }
+
+    // 빌링키 발급
+    const encodedKey = Buffer.from(`${serverEnv.TOSS_SECRET_KEY}:`).toString('base64');
+
+    const response = await fetch(
+      'https://api.tosspayments.com/v1/billing/authorizations/issue',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${encodedKey}`,
+          'Content-Type': 'application/json',
         },
-      }),
-    });
+        body: JSON.stringify({
+          authKey,
+          customerKey,
+        }),
+      }
+    );
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Gemini API 호출 실패: ${response.status} - ${error}`);
+      const error = await response.json();
+      console.error('토스페이먼츠 API 에러:', error);
+      throw new Error(error.message || '빌링키 발급 실패');
     }
 
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const billingData = await response.json();
 
-    if (!text) {
-      throw new Error('Gemini API 응답 형식이 올바르지 않습니다');
+    // Supabase에 저장
+    const supabase = createAdminClient();
+    const { error: dbError } = await supabase
+      .from('subscriptions')
+      .insert({
+        user_id: userId,
+        billing_key: billingData.billingKey,
+        customer_key: customerKey,
+        card_number: billingData.card?.number?.slice(-4),
+        card_type: billingData.card?.cardType,
+        card_company: billingData.card?.issuerCode,
+        status: 'active',
+        next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+
+    if (dbError) {
+      console.error('DB 저장 실패:', dbError);
+      throw new Error('구독 정보 저장 실패');
     }
 
-    return { text };
+    // 첫 결제 진행
+    const chargeResponse = await fetch(
+      `${env.NEXT_PUBLIC_BASE_URL}/api/subscription/charge`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          billingKey: billingData.billingKey,
+          customerKey,
+          amount: 9900,
+        }),
+      }
+    );
+
+    if (!chargeResponse.ok) {
+      // 첫 결제 실패 시 구독 삭제
+      await supabase
+        .from('subscriptions')
+        .delete()
+        .eq('billing_key', billingData.billingKey);
+
+      throw new Error('첫 결제 실패');
+    }
+
+    // users 테이블 업데이트
+    await supabase
+      .from('users')
+      .update({
+        subscription_status: 'pro',
+        test_count: 10,
+      })
+      .eq('id', userId);
+
+    return NextResponse.json({
+      success: true,
+      message: '구독이 성공적으로 등록되었습니다.'
+    });
+
+  } catch (error: any) {
+    console.error('빌링키 발급 실패:', error);
+    return NextResponse.json(
+      { error: error.message || '빌링키 발급에 실패했습니다.' },
+      { status: 500 }
+    );
   }
 }
-
-export const geminiClient = new GeminiClient(serverEnv.GEMINI_API_KEY);
 ```
 
 **사용될 곳:**
-- 사주분석 Server Action
-- AI 프롬프트 생성 후 호출
+- 구독 성공 페이지
 
-**우선순위:** 최고 (P0) - 사주분석 기능의 핵심
+**우선순위:** 최고 (P0)
 
 ---
 
-### 5.2 사주분석 프롬프트 생성
+### 3.3 자동결제 승인 API
 
 **필요한 이유:**
-- 사용자 입력을 기반으로 일관된 AI 프롬프트 생성
-- 프롬프트 품질 관리 및 수정 용이성
+- 빌링키로 정기 결제 실행
+- Cron Job에서 호출
 
 **구현 방법:**
 ```typescript
-// src/lib/gemini/prompts.ts
+// src/app/api/subscription/charge/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { serverEnv } from '@/constants/server-env';
+import { createAdminClient } from '@/lib/supabase/admin-client';
+import { v4 as uuidv4 } from 'uuid';
+
+export async function POST(request: NextRequest) {
+  try {
+    const { billingKey, customerKey, amount, userId } = await request.json();
+
+    const encodedKey = Buffer.from(`${serverEnv.TOSS_SECRET_KEY}:`).toString('base64');
+    const orderId = `ORDER_${Date.now()}_${uuidv4().slice(0, 8)}`;
+
+    const response = await fetch(
+      `https://api.tosspayments.com/v1/billing/${billingKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${encodedKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customerKey,
+          amount,
+          orderId,
+          orderName: 'Vibe Fortune Pro 구독',
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message);
+    }
+
+    const payment = await response.json();
+
+    // 결제 내역 저장
+    const supabase = createAdminClient();
+
+    // subscription_id 조회
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('id')
+      .eq('billing_key', billingKey)
+      .single();
+
+    if (subscription) {
+      await supabase.from('payments').insert({
+        user_id: userId,
+        subscription_id: subscription.id,
+        payment_key: payment.paymentKey,
+        order_id: orderId,
+        amount,
+        status: 'done',
+        paid_at: new Date().toISOString(),
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      paymentKey: payment.paymentKey,
+    });
+
+  } catch (error: any) {
+    console.error('자동결제 승인 실패:', error);
+    return NextResponse.json(
+      { error: error.message || '결제에 실패했습니다.' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+**사용될 곳:**
+- 빌링키 발급 후 첫 결제
+- Cron Job 정기 결제
+
+**우선순위:** 최고 (P0)
+
+---
+
+### 3.4 Cron Job 정기 결제 처리 API
+
+**필요한 이유:**
+- 매일 오전 2시 자동 실행
+- 오늘이 결제일인 구독 처리
+- 결제 성공 시 검사 횟수 충전
+- 결제 실패 시 구독 상태 변경
+
+**구현 방법:**
+```typescript
+// src/app/api/subscription/process/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin-client';
+import { serverEnv } from '@/constants/server-env';
+import { env } from '@/constants/env';
+
+export async function POST(request: NextRequest) {
+  // Cron 인증
+  const cronSecret = request.headers.get('x-cron-secret');
+  if (cronSecret !== serverEnv.CRON_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const supabase = createAdminClient();
+    const today = new Date().toISOString().split('T')[0];
+
+    // 1. 오늘이 결제일인 활성 구독 조회
+    const { data: subscriptions, error } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('status', 'active')
+      .lte('next_billing_date', today);
+
+    if (error) throw error;
+
+    const results = [];
+
+    // 2. 각 구독 결제 처리
+    for (const subscription of subscriptions || []) {
+      try {
+        const chargeResponse = await fetch(
+          `${env.NEXT_PUBLIC_BASE_URL}/api/subscription/charge`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              billingKey: subscription.billing_key,
+              customerKey: subscription.customer_key,
+              amount: 9900,
+              userId: subscription.user_id,
+            }),
+          }
+        );
+
+        if (chargeResponse.ok) {
+          // 결제 성공
+          await supabase
+            .from('subscriptions')
+            .update({
+              last_billing_date: new Date().toISOString(),
+              next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            })
+            .eq('id', subscription.id);
+
+          await supabase
+            .from('users')
+            .update({ test_count: 10 })
+            .eq('id', subscription.user_id);
+
+          results.push({ subscriptionId: subscription.id, success: true });
+        } else {
+          // 결제 실패
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'payment_failed' })
+            .eq('id', subscription.id);
+
+          await supabase
+            .from('users')
+            .update({ subscription_status: 'payment_failed' })
+            .eq('id', subscription.user_id);
+
+          results.push({ subscriptionId: subscription.id, success: false });
+        }
+      } catch (error: any) {
+        console.error(`구독 ${subscription.id} 처리 실패:`, error);
+        results.push({ subscriptionId: subscription.id, success: false, error: error.message });
+      }
+    }
+
+    // 3. 취소 예약 구독 해지 처리
+    const { data: cancelledSubscriptions } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('status', 'cancelled')
+      .lt('next_billing_date', today);
+
+    for (const subscription of cancelledSubscriptions || []) {
+      try {
+        // 빌링키 삭제 (토스페이먼츠 API)
+        const encodedKey = Buffer.from(`${serverEnv.TOSS_SECRET_KEY}:`).toString('base64');
+        await fetch(
+          `https://api.tosspayments.com/v1/billing/authorizations/${subscription.billing_key}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Basic ${encodedKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              customerKey: subscription.customer_key,
+            }),
+          }
+        );
+
+        // 구독 해지
+        await supabase
+          .from('subscriptions')
+          .update({
+            status: 'terminated',
+            billing_key_deleted_at: new Date().toISOString(),
+          })
+          .eq('id', subscription.id);
+
+        await supabase
+          .from('users')
+          .update({
+            subscription_status: 'free',
+            test_count: 0,
+          })
+          .eq('id', subscription.user_id);
+      } catch (error) {
+        console.error(`구독 ${subscription.id} 해지 실패:`, error);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      processed: results.length,
+      results,
+    });
+
+  } catch (error: any) {
+    console.error('정기 결제 처리 실패:', error);
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+}
+```
+
+**사용될 곳:**
+- Supabase Cron Job (매일 오전 2시)
+
+**우선순위:** 최고 (P0)
+
+---
+
+### 3.5 구독 취소/재개 Server Actions
+
+**필요한 이유:**
+- 사용자가 구독 취소/재개 요청
+- 구독 상태 업데이트
+
+**구현 방법:**
+```typescript
+// src/features/subscription/actions/cancel-subscription.ts
+'use server';
+
+import { createClient } from '@/lib/supabase/server-client';
+import { auth } from '@clerk/nextjs/server';
+
+export async function cancelSubscription() {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: '인증이 필요합니다.' };
+    }
+
+    const supabase = await createClient();
+
+    // 구독 상태 변경
+    const { error: subError } = await supabase
+      .from('subscriptions')
+      .update({ status: 'cancelled' })
+      .eq('user_id', userId);
+
+    if (subError) throw subError;
+
+    // users 테이블 업데이트
+    const { error: userError } = await supabase
+      .from('users')
+      .update({ subscription_status: 'cancelled' })
+      .eq('id', userId);
+
+    if (userError) throw userError;
+
+    return { success: true };
+  } catch (error) {
+    console.error('구독 취소 실패:', error);
+    return { success: false, error: '구독 취소에 실패했습니다.' };
+  }
+}
+
+// src/features/subscription/actions/resume-subscription.ts
+'use server';
+
+import { createClient } from '@/lib/supabase/server-client';
+import { auth } from '@clerk/nextjs/server';
+
+export async function resumeSubscription() {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: '인증이 필요합니다.' };
+    }
+
+    const supabase = await createClient();
+
+    const { error: subError } = await supabase
+      .from('subscriptions')
+      .update({ status: 'active' })
+      .eq('user_id', userId);
+
+    if (subError) throw subError;
+
+    const { error: userError } = await supabase
+      .from('users')
+      .update({ subscription_status: 'pro' })
+      .eq('id', userId);
+
+    if (userError) throw userError;
+
+    return { success: true };
+  } catch (error) {
+    console.error('구독 재개 실패:', error);
+    return { success: false, error: '구독 재개에 실패했습니다.' };
+  }
+}
+```
+
+**사용될 곳:**
+- 구독 관리 페이지
+
+**우선순위:** 최고 (P0)
+
+---
+
+## 4. 공통 UI 컴포넌트 (기존 구현 완료)
+
+### 4.1 마크다운 렌더러
+
+**현재 상태:** ✅ 구현됨 (`src/components/markdown-renderer.tsx`)
+
+**우선순위:** 완료
+
+---
+
+### 4.2 로딩 스피너
+
+**현재 상태:** ✅ 구현됨 (`src/components/ui/spinner.tsx`)
+
+**우선순위:** 완료
+
+---
+
+### 4.3 Date Picker
+
+**현재 상태:** ✅ 구현됨 (`src/components/ui/date-picker.tsx`)
+
+**우선순위:** 완료
+
+---
+
+### 4.4 Time Picker
+
+**현재 상태:** ✅ 구현됨 (`src/components/ui/time-picker.tsx`)
+
+**우선순위:** 완료
+
+---
+
+### 4.5 Empty State
+
+**현재 상태:** ✅ 구현됨 (`src/components/ui/empty-state.tsx`)
+
+**우선순위:** 완료
+
+---
+
+## 5. 공통 유틸리티 함수 (기존 구현 완료)
+
+### 5.1 날짜 포맷팅
+
+**현재 상태:** ✅ 구현됨 (`src/lib/utils/date.ts`)
+
+**우선순위:** 완료
+
+---
+
+### 5.2 클립보드 복사
+
+**현재 상태:** ✅ 구현됨 (`src/lib/utils/clipboard.ts`)
+
+**우선순위:** 완료
+
+---
+
+## 6. 구독 관리 공통 로직
+
+### 6.1 구독 정보 조회 함수
+
+**필요한 이유:**
+- 구독 관리 페이지, 사이드바에서 사용
+- 현재 구독 상태 확인
+
+**구현 방법:**
+```typescript
+// src/features/subscription/queries/get-subscription.ts
+import { createClient } from '@/lib/supabase/server-client';
+import { auth } from '@clerk/nextjs/server';
+import 'server-only';
+
+export type SubscriptionInfo = {
+  status: 'free' | 'pro' | 'cancelled' | 'payment_failed';
+  testCount: number;
+  nextBillingDate: string | null;
+  cardNumber: string | null;
+  cardCompany: string | null;
+};
+
+export async function getSubscription(): Promise<SubscriptionInfo | null> {
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  const supabase = await createClient();
+
+  // users 테이블에서 기본 정보 조회
+  const { data: user } = await supabase
+    .from('users')
+    .select('subscription_status, test_count')
+    .eq('id', userId)
+    .single();
+
+  if (!user) return null;
+
+  // 구독 정보 조회 (Pro인 경우)
+  if (user.subscription_status === 'pro' || user.subscription_status === 'cancelled') {
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('next_billing_date, card_number, card_company, status')
+      .eq('user_id', userId)
+      .single();
+
+    return {
+      status: user.subscription_status,
+      testCount: user.test_count,
+      nextBillingDate: subscription?.next_billing_date || null,
+      cardNumber: subscription?.card_number || null,
+      cardCompany: subscription?.card_company || null,
+    };
+  }
+
+  return {
+    status: user.subscription_status,
+    testCount: user.test_count,
+    nextBillingDate: null,
+    cardNumber: null,
+    cardCompany: null,
+  };
+}
+```
+
+**사용될 곳:**
+- 구독 관리 페이지
+- 대시보드 사이드바
+
+**우선순위:** 최고 (P0)
+
+---
+
+### 6.2 잔여 횟수 확인 및 차감
+
+**필요한 이유:**
+- 새 검사하기 시 잔여 횟수 확인
+- 검사 완료 시 횟수 차감
+
+**현재 상태:**
+- ✅ 기본 로직 구현됨 (`src/features/saju/actions/create-saju-test.ts`)
+- ❌ 구독 상태에 따른 모델 선택 로직 미구현
+
+**업데이트 방법:**
+```typescript
+// src/features/saju/actions/create-saju-test.ts (업데이트)
+'use server';
+
+import { redirect } from 'next/navigation';
+import { auth } from '@clerk/nextjs/server';
+import { createClient } from '@/lib/supabase/server-client';
+import { geminiClient } from '@/lib/gemini/client';
+import { generateSajuPrompt, generateProSajuPrompt } from '@/lib/gemini/prompts';
+import { sajuInputSchema, type SajuInput } from '@/features/saju/types/input';
+
+export async function createSajuTest(input: SajuInput) {
+  try {
+    const validatedInput = sajuInputSchema.parse(input);
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: '로그인이 필요합니다' };
+    }
+
+    const supabase = await createClient();
+
+    // 사용자 정보 조회 (구독 상태 포함)
+    const { data: user } = await supabase
+      .from('users')
+      .select('test_count, subscription_status')
+      .eq('id', userId)
+      .single();
+
+    if (!user) {
+      return { success: false, error: '사용자 정보를 찾을 수 없습니다' };
+    }
+
+    // 잔여 횟수 확인
+    if (user.test_count <= 0) {
+      return {
+        success: false,
+        error: '검사 횟수가 부족합니다. 구독 페이지로 이동하시겠습니까?',
+        needSubscription: true,
+      };
+    }
+
+    // 구독 상태에 따른 모델 선택
+    const isPro = user.subscription_status === 'pro' || user.subscription_status === 'cancelled';
+    const model = isPro ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const prompt = isPro
+      ? generateProSajuPrompt(validatedInput)
+      : generateSajuPrompt(validatedInput);
+
+    // Gemini API 호출
+    const { text: result } = await geminiClient.generateContent(prompt, model);
+
+    // 데이터베이스 저장
+    const { data: analysis, error: dbError } = await supabase
+      .from('analyses')
+      .insert({
+        user_id: userId,
+        name: validatedInput.name,
+        birth_date: validatedInput.birthDate,
+        birth_time: validatedInput.birthTime || null,
+        gender: validatedInput.gender,
+        analysis_result: result,
+        model_used: isPro ? 'pro' : 'flash',
+      })
+      .select()
+      .single();
+
+    if (dbError || !analysis) {
+      console.error('데이터베이스 저장 실패:', dbError);
+      return { success: false, error: '분석 결과 저장에 실패했습니다' };
+    }
+
+    // 횟수 차감
+    await supabase
+      .from('users')
+      .update({ test_count: user.test_count - 1 })
+      .eq('id', userId);
+
+    redirect(`/dashboard/results/${analysis.id}`);
+  } catch (error) {
+    console.error('사주분석 생성 실패:', error);
+    if (error instanceof Error) {
+      return { success: false, error: error.message };
+    }
+    return { success: false, error: '분석 중 오류가 발생했습니다' };
+  }
+}
+```
+
+**우선순위:** 최고 (P0)
+
+---
+
+## 7. Gemini API 관련 (업데이트 필요)
+
+### 7.1 Gemini Client
+
+**현재 상태:** ✅ 구현됨 (`src/lib/gemini/client.ts`)
+
+**우선순위:** 완료
+
+---
+
+### 7.2 프롬프트 생성
+
+**현재 상태:**
+- ✅ 기본 프롬프트 구현됨
+- ❌ Pro 전용 프롬프트 미구현
+
+**업데이트 방법:**
+```typescript
+// src/lib/gemini/prompts.ts (업데이트)
 import type { SajuInput } from '@/features/saju/types/input';
 import 'server-only';
 
@@ -509,11 +1238,11 @@ export function generateSajuPrompt(input: SajuInput): string {
 2. **오행(五行) 분석**: 목(木), 화(火), 토(土), 금(金), 수(水)의 균형 분석
 3. **대운(大運)과 세운(歲運)**: 인생의 흐름과 현재 운세
 4. **성격 분석**: 타고난 성격, 장단점, 대인관계 성향
-5. **재운 분석**: 재물운, 재테크 성향, 직업 적성
-6. **건강운 분석**: 주의해야 할 건강 부위, 건강 관리 조언
-7. **연애운 분석**: 이성관계, 결혼운, 배우자 성향
+5. **재운 분석**: 재물운, 재테크 성향
+6. **건강운 분석**: 주의해야 할 건강 부위
+7. **연애운 분석**: 이성관계, 결혼운
 
-**출력 형식**: 마크다운
+**출력 형식**: 마크다운 (제목, 목록, 강조 활용)
 
 **금지 사항**:
 - 의료·법률 조언 금지
@@ -522,1090 +1251,286 @@ export function generateSajuPrompt(input: SajuInput): string {
 
 각 섹션은 명확한 제목(## 또는 ###)으로 구분하고, 이해하기 쉽게 작성해주세요.`;
 }
-```
 
-**사용될 곳:**
-- 사주분석 Server Action
+export function generateProSajuPrompt(input: SajuInput): string {
+  const birthTimeText = input.birthTime || '미상';
+  const genderText = input.gender === 'male' ? '남성' : '여성';
+
+  return `당신은 30년 경력의 전문 사주팔자 상담사입니다.
+
+**입력 정보**:
+- 성함: ${input.name}
+- 생년월일: ${input.birthDate}
+- 출생시간: ${birthTimeText}
+- 성별: ${genderText}
+
+**분석 요구사항** (Pro 고급 분석):
+다음 섹션을 포함하여 상세한 사주분석 결과를 마크다운 형식으로 작성해주세요:
+
+1. **천간(天干)과 지지(地支)**: 생년월일시의 사주팔자를 계산하고 해석
+2. **오행(五行) 분석**: 목(木), 화(火), 토(土), 금(金), 수(水)의 균형 분석
+3. **대운(大運)과 세운(歲運)**: 인생의 흐름과 현재 운세
+4. **성격 분석**: 타고난 성격, 장단점, 대인관계 성향
+5. **재운 분석**: 재물운, 재테크 성향
+6. **건강운 분석**: 주의해야 할 건강 부위
+7. **연애운 분석**: 이성관계, 결혼운
+8. **직업운 및 사업운** (Pro 전용): 적합한 직업 분야, 사업 성공 가능성, 투자 조언
+9. **월별 운세** (Pro 전용): 향후 12개월 운세 및 길일 분석
+
+**출력 형식**: 마크다운 (제목, 목록, 강조 활용)
+
+**금지 사항**:
+- 의료·법률 조언 금지
+- 확정적 미래 예측 금지
+- 부정적·공격적 표현 금지
+
+각 섹션은 명확한 제목(## 또는 ###)으로 구분하고, Pro 사용자에게 맞는 깊이 있는 분석을 제공해주세요.`;
+}
+```
 
 **우선순위:** 최고 (P0)
 
 ---
 
-## 6. Server Actions
+## 8. 설치 필요 패키지
 
-### 6.1 사주분석 생성 Action
-
-**필요한 이유:**
-- 새 검사하기 폼 제출 시 AI 분석 실행 및 데이터베이스 저장
-- 클라이언트-서버 간 안전한 통신
-
-**구현 방법:**
-```typescript
-// src/features/saju/actions/create-saju-test.ts
-'use server';
-
-import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server-client';
-import { geminiClient } from '@/lib/gemini/client';
-import { generateSajuPrompt } from '@/lib/gemini/prompts';
-import { sajuInputSchema, type SajuInput } from '@/features/saju/types/input';
-
-export type CreateSajuTestResult =
-  | { success: true; testId: string }
-  | { success: false; error: string };
-
-export async function createSajuTest(
-  input: SajuInput
-): Promise<CreateSajuTestResult> {
-  try {
-    // 1. 입력 검증
-    const validatedInput = sajuInputSchema.parse(input);
-
-    // 2. 사용자 인증 확인
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { success: false, error: '로그인이 필요합니다' };
-    }
-
-    // 3. AI 프롬프트 생성
-    const prompt = generateSajuPrompt(validatedInput);
-
-    // 4. Gemini API 호출
-    const { text: result } = await geminiClient.generateContent(prompt);
-
-    // 5. 데이터베이스 저장
-    const { data: sajuTest, error: dbError } = await supabase
-      .from('saju_tests')
-      .insert({
-        user_id: user.id,
-        name: validatedInput.name,
-        birth_date: validatedInput.birthDate,
-        birth_time: validatedInput.birthTime || null,
-        gender: validatedInput.gender,
-        result,
-      })
-      .select()
-      .single();
-
-    if (dbError || !sajuTest) {
-      console.error('데이터베이스 저장 실패:', dbError);
-      return { success: false, error: '분석 결과 저장에 실패했습니다' };
-    }
-
-    // 6. 상세 페이지로 리다이렉트
-    redirect(`/dashboard/results/${sajuTest.id}`);
-  } catch (error) {
-    console.error('사주분석 생성 실패:', error);
-
-    if (error instanceof Error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: false, error: '분석 중 오류가 발생했습니다' };
-  }
-}
-```
-
-**사용될 곳:**
-- 새 검사하기 페이지 폼 제출
-
-**우선순위:** 최고 (P0)
-
----
-
-### 6.2 사주분석 목록 조회 함수
-
-**필요한 이유:**
-- 대시보드에서 사주분석 이력 목록 조회
-- Server Component에서 직접 호출
-
-**구현 방법:**
-```typescript
-// src/features/saju/queries/get-saju-tests.ts
-import { createClient } from '@/lib/supabase/server-client';
-import type { SajuTestListItem } from '@/features/saju/types/result';
-import 'server-only';
-
-export async function getSajuTests(limit = 10): Promise<SajuTestListItem[]> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return [];
-  }
-
-  const { data, error } = await supabase
-    .from('saju_tests')
-    .select('id, name, birth_date, gender, result, created_at')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    console.error('사주분석 목록 조회 실패:', error);
-    return [];
-  }
-
-  return data.map((test) => ({
-    id: test.id,
-    name: test.name,
-    birthDate: test.birth_date,
-    gender: test.gender as 'male' | 'female',
-    createdAt: test.created_at,
-    preview: test.result.slice(0, 100) + '...',
-  }));
-}
-```
-
-**사용될 곳:**
-- 대시보드 페이지
-
-**우선순위:** 최고 (P0)
-
----
-
-### 6.3 사주분석 상세 조회 함수
-
-**필요한 이유:**
-- 사주분석 상세 페이지에서 특정 분석 결과 조회
-- 본인 분석만 접근 가능 (RLS 적용)
-
-**구현 방법:**
-```typescript
-// src/features/saju/queries/get-saju-test.ts
-import { createClient } from '@/lib/supabase/server-client';
-import type { SajuTestResult } from '@/features/saju/types/result';
-import 'server-only';
-
-export async function getSajuTest(
-  id: string
-): Promise<SajuTestResult | null> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return null;
-  }
-
-  const { data, error } = await supabase
-    .from('saju_tests')
-    .select('*')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .single();
-
-  if (error || !data) {
-    console.error('사주분석 조회 실패:', error);
-    return null;
-  }
-
-  return {
-    id: data.id,
-    userId: data.user_id,
-    name: data.name,
-    birthDate: data.birth_date,
-    birthTime: data.birth_time,
-    gender: data.gender as 'male' | 'female',
-    result: data.result,
-    createdAt: data.created_at,
-  };
-}
-```
-
-**사용될 곳:**
-- 사주분석 상세 페이지
-
-**우선순위:** 최고 (P0)
-
----
-
-## 7. Clerk 인증 연동
-
-### 7.1 Clerk Middleware 설정
-
-**필요한 이유:**
-- 보호된 페이지 접근 제어
-- 현재 middleware.ts는 Supabase Auth 기반이므로 Clerk로 전환 필요
-
-**구현 방법:**
-```typescript
-// middleware.ts (수정)
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-
-const isPublicRoute = createRouteMatcher([
-  '/',
-  '/sign-in(.*)',
-  '/sign-up(.*)',
-  '/api/webhooks/clerk',
-]);
-
-export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect();
-  }
-});
-
-export const config = {
-  matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    '/(api|trpc)(.*)',
-  ],
-};
-```
-
-**사용될 곳:**
-- 모든 페이지 요청
-- `/dashboard/*` 경로 보호
-
-**우선순위:** 최고 (P0) - 인증 없이 개발 불가
-
----
-
-### 7.2 Clerk Webhook 핸들러
-
-**필요한 이유:**
-- Clerk 사용자 정보를 Supabase users 테이블에 동기화
-- `user.created`, `user.updated` 이벤트 처리
-
-**구현 방법:**
-```typescript
-// src/app/api/webhooks/clerk/route.ts
-import { headers } from 'next/headers';
-import { Webhook } from 'svix';
-import { WebhookEvent } from '@clerk/nextjs/server';
-import { createAdminClient } from '@/lib/supabase/admin-client';
-import { serverEnv } from '@/constants/server-env';
-
-export async function POST(req: Request) {
-  const WEBHOOK_SECRET = serverEnv.CLERK_WEBHOOK_SECRET;
-
-  if (!WEBHOOK_SECRET) {
-    return new Response('Webhook secret not configured', { status: 500 });
-  }
-
-  // 헤더 가져오기
-  const headerPayload = await headers();
-  const svix_id = headerPayload.get('svix-id');
-  const svix_timestamp = headerPayload.get('svix-timestamp');
-  const svix_signature = headerPayload.get('svix-signature');
-
-  if (!svix_id || !svix_timestamp || !svix_signature) {
-    return new Response('Missing svix headers', { status: 400 });
-  }
-
-  // 페이로드 가져오기
-  const payload = await req.json();
-  const body = JSON.stringify(payload);
-
-  // Webhook 검증
-  const wh = new Webhook(WEBHOOK_SECRET);
-  let evt: WebhookEvent;
-
-  try {
-    evt = wh.verify(body, {
-      'svix-id': svix_id,
-      'svix-timestamp': svix_timestamp,
-      'svix-signature': svix_signature,
-    }) as WebhookEvent;
-  } catch (err) {
-    console.error('Webhook 검증 실패:', err);
-    return new Response('Webhook verification failed', { status: 400 });
-  }
-
-  const supabase = createAdminClient();
-
-  // user.created 이벤트 처리
-  if (evt.type === 'user.created') {
-    const { id, email_addresses, first_name, last_name } = evt.data;
-    const email = email_addresses[0]?.email_address;
-    const name = [last_name, first_name].filter(Boolean).join('') || email?.split('@')[0] || 'Unknown';
-
-    const { error } = await supabase.from('users').insert({
-      id,
-      email: email || '',
-      name,
-    });
-
-    if (error) {
-      console.error('사용자 생성 실패:', error);
-      return new Response('User creation failed', { status: 500 });
-    }
-  }
-
-  // user.updated 이벤트 처리
-  if (evt.type === 'user.updated') {
-    const { id, email_addresses, first_name, last_name } = evt.data;
-    const email = email_addresses[0]?.email_address;
-    const name = [last_name, first_name].filter(Boolean).join('') || email?.split('@')[0] || 'Unknown';
-
-    const { error } = await supabase
-      .from('users')
-      .update({
-        email: email || '',
-        name,
-      })
-      .eq('id', id);
-
-    if (error) {
-      console.error('사용자 업데이트 실패:', error);
-      return new Response('User update failed', { status: 500 });
-    }
-  }
-
-  return new Response('Webhook processed', { status: 200 });
-}
-```
-
-**사용될 곳:**
-- Clerk에서 자동 호출 (배포 후)
-
-**우선순위:** 높음 (P1) - 배포 후 필수
-
----
-
-### 7.3 Clerk 환경 변수 추가
-
-**필요한 이유:**
-- Clerk 인증 설정
-- 환경 변수 검증
-
-**구현 방법:**
-```bash
-# .env.local (추가)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
-CLERK_WEBHOOK_SECRET=whsec_...
-```
-
-```typescript
-// src/constants/env.ts (수정)
-const clientEnvSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1), // 추가
-});
-```
-
-```typescript
-// src/constants/server-env.ts (수정)
-const serverEnvSchema = z.object({
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-  GEMINI_API_KEY: z.string().min(1),
-  CLERK_SECRET_KEY: z.string().min(1), // 추가
-  CLERK_WEBHOOK_SECRET: z.string().min(1).optional(),
-});
-```
-
-**사용될 곳:**
-- 모든 Clerk 관련 기능
-
-**우선순위:** 최고 (P0)
-
----
-
-## 8. 공통 UI 컴포넌트
-
-### 8.1 마크다운 렌더러
-
-**필요한 이유:**
-- AI 분석 결과(마크다운)를 HTML로 렌더링
-- 일관된 스타일 적용
-
-**구현 방법:**
-```typescript
-// src/components/markdown-renderer.tsx
-'use client';
-
-import ReactMarkdown from 'react-markdown';
-
-type MarkdownRendererProps = {
-  content: string;
-};
-
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
-  return (
-    <div className="prose prose-slate max-w-none">
-      <ReactMarkdown>{content}</ReactMarkdown>
-    </div>
-  );
-}
-```
+### 8.1 토스페이먼츠 SDK
 
 ```bash
-# 패키지 설치
-pnpm add react-markdown
-```
-
-**사용될 곳:**
-- 사주분석 상세 페이지
-
-**우선순위:** 최고 (P0)
-
----
-
-### 8.2 로딩 스피너 컴포넌트
-
-**필요한 이유:**
-- AI 분석 중 로딩 상태 표시
-- 일관된 로딩 UI
-
-**구현 방법:**
-```typescript
-// src/components/ui/spinner.tsx
-import { Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-type SpinnerProps = {
-  className?: string;
-  size?: 'sm' | 'md' | 'lg';
-};
-
-export function Spinner({ className, size = 'md' }: SpinnerProps) {
-  const sizeClasses = {
-    sm: 'h-4 w-4',
-    md: 'h-8 w-8',
-    lg: 'h-12 w-12',
-  };
-
-  return (
-    <Loader2
-      className={cn('animate-spin text-primary', sizeClasses[size], className)}
-    />
-  );
-}
-```
-
-**사용될 곳:**
-- 새 검사하기 페이지 (분석 중)
-- 페이지 로딩 상태
-
-**우선순위:** 높음 (P1)
-
----
-
-### 8.3 Date Picker 컴포넌트
-
-**필요한 이유:**
-- 생년월일 입력 UX 개선
-- shadcn/ui 기반 구현
-
-**구현 방법:**
-```typescript
-// src/components/ui/date-picker.tsx
-'use client';
-
-import * as React from 'react';
-import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
-import { Calendar as CalendarIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-
-type DatePickerProps = {
-  value?: Date;
-  onChange?: (date: Date | undefined) => void;
-  placeholder?: string;
-  disabled?: boolean;
-};
-
-export function DatePicker({
-  value,
-  onChange,
-  placeholder = '날짜를 선택하세요',
-  disabled,
-}: DatePickerProps) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          disabled={disabled}
-          className={cn(
-            'w-full justify-start text-left font-normal',
-            !value && 'text-muted-foreground'
-          )}
-        >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {value ? format(value, 'PPP', { locale: ko }) : placeholder}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0">
-        <Calendar
-          mode="single"
-          selected={value}
-          onSelect={onChange}
-          locale={ko}
-          disabled={(date) =>
-            date > new Date() || date < new Date('1900-01-01')
-          }
-          initialFocus
-        />
-      </PopoverContent>
-    </Popover>
-  );
-}
-```
-
-```bash
-# 패키지 설치
-pnpm add date-fns react-day-picker
-npx shadcn@latest add calendar popover
-```
-
-**사용될 곳:**
-- 새 검사하기 페이지 (생년월일 입력)
-
-**우선순위:** 높음 (P1)
-
----
-
-### 8.4 Time Picker 컴포넌트
-
-**필요한 이유:**
-- 출생시간 입력 UX 개선
-- 시간 선택 UI
-
-**구현 방법:**
-```typescript
-// src/components/ui/time-picker.tsx
-'use client';
-
-import * as React from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-
-type TimePickerProps = {
-  value?: string;
-  onChange?: (time: string) => void;
-  disabled?: boolean;
-};
-
-export function TimePicker({ value, onChange, disabled }: TimePickerProps) {
-  const [hour, setHour] = React.useState('');
-  const [minute, setMinute] = React.useState('');
-
-  React.useEffect(() => {
-    if (value) {
-      const [h, m] = value.split(':');
-      setHour(h || '');
-      setMinute(m || '');
-    }
-  }, [value]);
-
-  const handleHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 2);
-    const numVal = parseInt(val, 10);
-
-    if (val === '' || (numVal >= 0 && numVal <= 23)) {
-      setHour(val);
-      if (val.length === 2 && minute) {
-        onChange?.(`${val.padStart(2, '0')}:${minute.padStart(2, '0')}`);
-      }
-    }
-  };
-
-  const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 2);
-    const numVal = parseInt(val, 10);
-
-    if (val === '' || (numVal >= 0 && numVal <= 59)) {
-      setMinute(val);
-      if (hour && val.length === 2) {
-        onChange?.(`${hour.padStart(2, '0')}:${val.padStart(2, '0')}`);
-      }
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-1">
-        <Input
-          type="text"
-          placeholder="00"
-          value={hour}
-          onChange={handleHourChange}
-          disabled={disabled}
-          className="w-16 text-center"
-          maxLength={2}
-        />
-        <Label>시</Label>
-      </div>
-      <span className="text-muted-foreground">:</span>
-      <div className="flex items-center gap-1">
-        <Input
-          type="text"
-          placeholder="00"
-          value={minute}
-          onChange={handleMinuteChange}
-          disabled={disabled}
-          className="w-16 text-center"
-          maxLength={2}
-        />
-        <Label>분</Label>
-      </div>
-    </div>
-  );
-}
-```
-
-**사용될 곳:**
-- 새 검사하기 페이지 (출생시간 입력)
-
-**우선순위:** 높음 (P1)
-
----
-
-### 8.5 Empty State 컴포넌트
-
-**필요한 이유:**
-- 대시보드에 이력이 없을 때 표시
-- 일관된 빈 상태 UI
-
-**구현 방법:**
-```typescript
-// src/components/ui/empty-state.tsx
-import { FileQuestion } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-
-type EmptyStateProps = {
-  title: string;
-  description: string;
-  actionLabel?: string;
-  onAction?: () => void;
-};
-
-export function EmptyState({
-  title,
-  description,
-  actionLabel,
-  onAction,
-}: EmptyStateProps) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <FileQuestion className="h-16 w-16 text-muted-foreground mb-4" />
-      <h3 className="text-lg font-semibold mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-        {description}
-      </p>
-      {actionLabel && onAction && (
-        <Button onClick={onAction}>{actionLabel}</Button>
-      )}
-    </div>
-  );
-}
-```
-
-**사용될 곳:**
-- 대시보드 (이력 없을 때)
-
-**우선순위:** 중간 (P2)
-
----
-
-## 9. 공통 레이아웃 컴포넌트
-
-### 9.1 대시보드 헤더
-
-**필요한 이유:**
-- 대시보드, 새 검사, 상세 페이지에서 공통 사용
-- 로고, 네비게이션, 사용자 프로필 버튼
-
-**구임 방법:**
-```typescript
-// src/components/layout/dashboard-header.tsx
-'use client';
-
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { UserButton } from '@clerk/nextjs';
-import { cn } from '@/lib/utils';
-
-const navItems = [
-  { label: '대시보드', href: '/dashboard' },
-  { label: '새 검사', href: '/dashboard/new' },
-];
-
-export function DashboardHeader() {
-  const pathname = usePathname();
-
-  return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center">
-        <Link href="/dashboard" className="mr-6 flex items-center space-x-2">
-          <span className="font-bold text-xl">Vibe Fortune</span>
-        </Link>
-        <nav className="flex items-center gap-6 flex-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'text-sm font-medium transition-colors hover:text-primary',
-                pathname === item.href
-                  ? 'text-foreground'
-                  : 'text-muted-foreground'
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <UserButton afterSignOutUrl="/" />
-      </div>
-    </header>
-  );
-}
-```
-
-**사용될 곳:**
-- 대시보드 레이아웃 (`/dashboard/layout.tsx`)
-
-**우선순위:** 최고 (P0)
-
----
-
-### 9.2 홈 헤더
-
-**필요한 이유:**
-- 홈 페이지 헤더 (로그인 상태에 따라 버튼 변경)
-
-**구현 방법:**
-```typescript
-// src/components/layout/home-header.tsx
-'use client';
-
-import Link from 'next/link';
-import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
-import { Button } from '@/components/ui/button';
-
-export function HomeHeader() {
-  return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center">
-        <Link href="/" className="mr-6 flex items-center space-x-2">
-          <span className="font-bold text-xl">Vibe Fortune</span>
-        </Link>
-        <nav className="flex items-center gap-6 flex-1">
-          <Link
-            href="/#features"
-            className="text-sm font-medium text-muted-foreground hover:text-primary"
-          >
-            서비스
-          </Link>
-          <Link
-            href="/#pricing"
-            className="text-sm font-medium text-muted-foreground hover:text-primary"
-          >
-            가격
-          </Link>
-          <Link
-            href="/#faq"
-            className="text-sm font-medium text-muted-foreground hover:text-primary"
-          >
-            FAQ
-          </Link>
-        </nav>
-        <SignedOut>
-          <SignInButton mode="modal">
-            <Button>시작하기</Button>
-          </SignInButton>
-        </SignedOut>
-        <SignedIn>
-          <Link href="/dashboard">
-            <Button>이용하기</Button>
-          </Link>
-          <UserButton afterSignOutUrl="/" />
-        </SignedIn>
-      </div>
-    </header>
-  );
-}
-```
-
-**사용될 곳:**
-- 홈 페이지 (`/page.tsx`)
-
-**우선순위:** 높음 (P1)
-
----
-
-## 10. 공통 유틸리티 함수
-
-### 10.1 날짜 포맷팅
-
-**필요한 이유:**
-- 일관된 날짜 표시 형식
-- 생년월일, 분석 날짜 등
-
-**구현 방법:**
-```typescript
-// src/lib/utils/date.ts
-import { format, parseISO } from 'date-fns';
-import { ko } from 'date-fns/locale';
-
-export function formatDate(date: string | Date, pattern = 'yyyy년 MM월 dd일'): string {
-  const dateObj = typeof date === 'string' ? parseISO(date) : date;
-  return format(dateObj, pattern, { locale: ko });
-}
-
-export function formatDateTime(date: string | Date): string {
-  const dateObj = typeof date === 'string' ? parseISO(date) : date;
-  return format(dateObj, 'yyyy년 MM월 dd일 HH:mm', { locale: ko });
-}
-
-export function formatBirthDate(date: string): string {
-  return formatDate(date, 'yyyy-MM-dd');
-}
-```
-
-**사용될 곳:**
-- 대시보드 이력 카드
-- 사주분석 상세 페이지
-
-**우선순위:** 중간 (P2)
-
----
-
-### 10.2 클립보드 복사
-
-**필요한 이유:**
-- 사주분석 결과 복사 기능
-- 브라우저 호환성 처리
-
-**구현 방법:**
-```typescript
-// src/lib/utils/clipboard.ts
-export async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } else {
-      // 폴백: textarea 사용
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      const success = document.execCommand('copy');
-      document.body.removeChild(textarea);
-      return success;
-    }
-  } catch (error) {
-    console.error('클립보드 복사 실패:', error);
-    return false;
-  }
-}
-```
-
-**사용될 곳:**
-- 사주분석 상세 페이지 (결과 복사 버튼)
-
-**우선순위:** 중간 (P2)
-
----
-
-## 11. 설치 필요 패키지
-
-### 11.1 Clerk 관련
-
-```bash
-pnpm add @clerk/nextjs svix
+pnpm add @tosspayments/tosspayments-sdk uuid
+pnpm add -D @types/uuid
 ```
 
 **우선순위:** 최고 (P0)
 
 ---
 
-### 11.2 마크다운 렌더링
+### 8.2 기타 (이미 설치됨)
 
 ```bash
-pnpm add react-markdown
+# 이미 설치된 패키지들
+# pnpm add @clerk/nextjs svix
+# pnpm add react-markdown
+# pnpm add date-fns react-day-picker
 ```
 
-**우선순위:** 최고 (P0)
+---
+
+## 9. 구현 우선순위 요약
+
+### P0 (최고 우선순위 - 구독 기능 개발 전 필수)
+
+1. **데이터베이스 마이그레이션**
+   - subscriptions, payments 테이블 생성
+   - users 테이블에 구독 필드 추가
+   - Cron Job 설정
+
+2. **타입 정의 업데이트**
+   - Database 타입에 구독 테이블 추가
+   - Subscription, Payment 타입 export
+
+3. **환경 변수 추가**
+   - TOSS_SECRET_KEY (server)
+   - NEXT_PUBLIC_TOSS_CLIENT_KEY (client)
+   - CRON_SECRET (server)
+
+4. **토스페이먼츠 SDK 통합**
+   - SDK 초기화 (`src/lib/tosspayments/client.ts`)
+   - 빌링키 발급 API (`src/app/api/subscription/confirm/route.ts`)
+   - 자동결제 승인 API (`src/app/api/subscription/charge/route.ts`)
+
+5. **Cron Job 정기 결제 처리**
+   - 정기 결제 처리 API (`src/app/api/subscription/process/route.ts`)
+
+6. **구독 관리 Actions**
+   - 구독 취소 (`src/features/subscription/actions/cancel-subscription.ts`)
+   - 구독 재개 (`src/features/subscription/actions/resume-subscription.ts`)
+
+7. **구독 정보 조회 함수**
+   - `src/features/subscription/queries/get-subscription.ts`
+
+8. **Gemini 프롬프트 업데이트**
+   - Pro 전용 프롬프트 추가
+
+9. **사주분석 Action 업데이트**
+   - 구독 상태에 따른 모델 선택 로직 추가
+
+### P1 (높은 우선순위 - 완료됨)
+
+- ✅ 모든 기본 UI 컴포넌트 구현 완료
+- ✅ 유틸리티 함수 구현 완료
+- ✅ Clerk Webhook 구현 완료
 
 ---
 
-### 11.3 Date Picker 관련
-
-```bash
-pnpm add date-fns react-day-picker
-npx shadcn@latest add calendar popover
-```
-
-**우선순위:** 높음 (P1)
-
----
-
-## 12. 구현 우선순위 요약
-
-### P0 (최고 우선순위 - 즉시 구현)
-
-1. Supabase Database Types (`src/lib/supabase/types.ts`)
-2. Supabase 마이그레이션 실행
-3. 서버 환경 변수 설정 (`src/constants/server-env.ts`)
-4. Clerk 환경 변수 추가 및 Middleware 수정
-5. 사주분석 입력 타입 및 Validation (`src/features/saju/types/input.ts`)
-6. Supabase Server Client 헬퍼 (`src/lib/supabase/server-client.ts`)
-7. Gemini API Client (`src/lib/gemini/client.ts`)
-8. 사주분석 프롬프트 생성 (`src/lib/gemini/prompts.ts`)
-9. 사주분석 생성 Server Action (`src/features/saju/actions/create-saju-test.ts`)
-10. 사주분석 목록/상세 조회 함수 (`src/features/saju/queries/`)
-11. 마크다운 렌더러 (`src/components/markdown-renderer.tsx`)
-12. 대시보드 헤더 (`src/components/layout/dashboard-header.tsx`)
-
-### P1 (높은 우선순위 - 조기 구현)
-
-1. Supabase Admin Client (`src/lib/supabase/admin-client.ts`)
-2. Clerk Webhook 핸들러 (`src/app/api/webhooks/clerk/route.ts`)
-3. Date Picker 컴포넌트
-4. Time Picker 컴포넌트
-5. 로딩 스피너 컴포넌트
-6. 홈 헤더
-7. 사주분석 결과 타입
-
-### P2 (중간 우선순위 - 필요 시 구현)
-
-1. Supabase Browser Client (거의 사용 안함)
-2. Empty State 컴포넌트
-3. 날짜 포맷팅 유틸리티
-4. 클립보드 복사 유틸리티
-
----
-
-## 13. 디렉토리 구조
+## 10. 디렉토리 구조
 
 ```
 src/
 ├── lib/
 │   ├── supabase/
-│   │   ├── types.ts (P0)
-│   │   ├── server-client.ts (P0)
-│   │   ├── admin-client.ts (P1)
-│   │   └── browser-client.ts (P2)
+│   │   ├── types.ts (업데이트 필요, P0)
+│   │   ├── server-client.ts (완료)
+│   │   ├── admin-client.ts (완료)
+│   │   └── browser-client.ts (완료)
 │   ├── gemini/
-│   │   ├── client.ts (P0)
-│   │   └── prompts.ts (P0)
+│   │   ├── client.ts (완료)
+│   │   └── prompts.ts (업데이트 필요, P0)
+│   ├── tosspayments/ (신규, P0)
+│   │   └── client.ts
 │   └── utils/
-│       ├── date.ts (P2)
-│       └── clipboard.ts (P2)
+│       ├── date.ts (완료)
+│       └── clipboard.ts (완료)
 ├── features/
-│   └── saju/
+│   ├── saju/
+│   │   ├── types/
+│   │   │   ├── input.ts (완료)
+│   │   │   └── result.ts (완료)
+│   │   ├── actions/
+│   │   │   └── create-saju-test.ts (업데이트 필요, P0)
+│   │   └── queries/
+│   │       ├── get-saju-tests.ts (완료)
+│   │       └── get-saju-test.ts (완료)
+│   └── subscription/ (신규, P0)
 │       ├── types/
-│       │   ├── input.ts (P0)
-│       │   └── result.ts (P1)
+│       │   └── subscription.ts
 │       ├── actions/
-│       │   └── create-saju-test.ts (P0)
+│       │   ├── cancel-subscription.ts
+│       │   └── resume-subscription.ts
 │       └── queries/
-│           ├── get-saju-tests.ts (P0)
-│           └── get-saju-test.ts (P0)
+│           └── get-subscription.ts
 ├── components/
 │   ├── layout/
-│   │   ├── dashboard-header.tsx (P0)
-│   │   └── home-header.tsx (P1)
-│   ├── ui/
-│   │   ├── date-picker.tsx (P1)
-│   │   ├── time-picker.tsx (P1)
-│   │   ├── spinner.tsx (P1)
-│   │   └── empty-state.tsx (P2)
-│   └── markdown-renderer.tsx (P0)
+│   │   ├── dashboard-header.tsx (완료)
+│   │   └── home-header.tsx (완료)
+│   ├── ui/ (모두 완료)
+│   └── markdown-renderer.tsx (완료)
 ├── constants/
-│   ├── env.ts (수정, P0)
-│   └── server-env.ts (P0)
+│   ├── env.ts (업데이트 필요, P0)
+│   └── server-env.ts (업데이트 필요, P0)
 ├── app/
-│   └── api/
-│       └── webhooks/
-│           └── clerk/
-│               └── route.ts (P1)
-└── middleware.ts (수정, P0)
+│   ├── api/
+│   │   ├── webhooks/
+│   │   │   └── clerk/
+│   │   │       └── route.ts (완료)
+│   │   └── subscription/ (신규, P0)
+│   │       ├── confirm/
+│   │       │   └── route.ts
+│   │       ├── charge/
+│   │       │   └── route.ts
+│   │       └── process/
+│   │           └── route.ts
+│   └── ...
+└── middleware.ts (완료)
 ```
 
 ---
 
-## 14. 작업 순서 권장사항
+## 11. 작업 순서 권장사항
 
-1. **Phase 1: 기반 설정 (P0)**
-   - Supabase 마이그레이션 실행
-   - 환경 변수 설정 (Clerk, Gemini)
-   - Clerk Middleware 수정
-   - Database Types 정의
+### Phase 1: 데이터베이스 및 환경 설정 (30분)
+1. Supabase 마이그레이션 실행
+2. 환경 변수 추가 (.env.local)
+3. Database Types 업데이트
 
-2. **Phase 2: 핵심 로직 (P0)**
-   - Supabase Server Client 헬퍼
-   - Gemini API Client 및 프롬프트
-   - 사주분석 Server Actions 및 Queries
-   - 마크다운 렌더러
+### Phase 2: 토스페이먼츠 SDK 통합 (1시간)
+1. 패키지 설치
+2. SDK 초기화 (`src/lib/tosspayments/client.ts`)
+3. 빌링키 발급 API
+4. 자동결제 승인 API
 
-3. **Phase 3: 공통 UI (P0-P1)**
-   - 헤더 컴포넌트 (Home, Dashboard)
-   - Date/Time Picker
-   - 로딩 스피너
+### Phase 3: Cron Job 및 정기 결제 (1시간)
+1. Cron Job 정기 결제 처리 API
+2. 구독 취소/재개 Actions
+3. 구독 정보 조회 함수
 
-4. **Phase 4: Webhook 및 부가 기능 (P1)**
-   - Clerk Webhook 핸들러
-   - Admin Client
+### Phase 4: 기존 기능 업데이트 (30분)
+1. Gemini 프롬프트 Pro 버전 추가
+2. 사주분석 Action 업데이트 (모델 선택 로직)
 
-5. **Phase 5: 선택적 유틸리티 (P2)**
-   - Empty State
-   - 날짜 포맷팅, 클립보드 복사
+### 총 예상 시간: 3시간
 
 ---
 
-## 15. 검증 체크리스트
+## 12. 검증 체크리스트
 
 각 모듈 구현 후 다음 사항을 확인하세요:
 
-- [ ] TypeScript 컴파일 에러 없음
+### 데이터베이스
+- [ ] subscriptions, payments 테이블 생성 완료
+- [ ] users 테이블에 구독 필드 추가 완료
+- [ ] RLS 정책 적용 완료
+- [ ] Cron Job 등록 완료
+
+### 환경 변수
+- [ ] 토스페이먼츠 키 추가 완료
+- [ ] CRON_SECRET 추가 완료
 - [ ] 환경 변수 검증 통과
-- [ ] Supabase 연결 테스트 성공
-- [ ] Clerk 인증 플로우 정상 작동
-- [ ] Gemini API 호출 테스트 성공
-- [ ] Database 마이그레이션 적용 완료
-- [ ] RLS 정책 테스트 (본인 데이터만 접근)
-- [ ] Webhook 테스트 (배포 후)
+
+### 토스페이먼츠 연동
+- [ ] SDK 초기화 정상 작동
+- [ ] 빌링키 발급 테스트 성공
+- [ ] 자동결제 승인 테스트 성공
+- [ ] Cron Job 정기 결제 테스트 성공
+
+### 구독 관리
+- [ ] 구독 정보 조회 정상 작동
+- [ ] 구독 취소 정상 작동
+- [ ] 구독 재개 정상 작동
+
+### 사주분석
+- [ ] Pro 프롬프트 정상 작동
+- [ ] 모델 선택 로직 정상 작동
+- [ ] 잔여 횟수 확인 및 차감 정상 작동
 
 ---
 
-## 16. 주의사항
+## 13. 주의사항
 
-1. **Clerk vs Supabase Auth 충돌 방지**
-   - 현재 코드베이스는 Supabase Auth 사용 중
-   - Clerk로 전환 시 middleware.ts 완전 교체 필요
-   - `src/features/auth/` 디렉토리는 Clerk 사용 시 불필요할 수 있음 (확인 필요)
+### 1. 구독 정책
+- 무료 사용자: 초기 3회만 제공 (소진 후 0회)
+- Pro 구독자: 월 10회 (매월 갱신)
+- 구독 취소 시 다음 결제일까지 Pro 혜택 유지
 
-2. **RLS 정책 주의**
-   - Service Role Key는 RLS 우회하므로 Webhook에서만 사용
-   - 일반 데이터 조회는 Anon Key 사용 (RLS 적용)
+### 2. 빌링키 보안
+- 빌링키는 암호화하여 저장 권장
+- 로그에 절대 노출 금지
+- 재조회 불가능 (한 번 발급되면 끝)
 
-3. **환경 변수 보안**
-   - `NEXT_PUBLIC_*`은 클라이언트 노출
-   - API 키는 절대 `NEXT_PUBLIC_` 접두사 사용 금지
+### 3. customerKey
+- UUID 사용 (유추 불가능)
+- 이메일, 전화번호 사용 금지
 
-4. **TypeScript Strict Mode**
-   - 모든 타입은 명시적으로 정의
-   - `any` 타입 사용 금지
+### 4. Cron Job
+- Supabase Vault에 CRON_SECRET 저장
+- 10초 이내 응답 필수
+- 멱등성 보장 (중복 실행 대비)
 
-5. **Server-only 패키지 사용**
-   - 서버 전용 코드에는 `import 'server-only'` 추가
-   - 클라이언트에서 실수로 import 시 빌드 에러 발생
+### 5. 테스트 환경
+- 토스페이먼츠 테스트 키 사용
+- 실제 결제 없음
+- 본인인증: 000000 입력
+
+### 6. 에러 처리
+- 결제 실패 시 재시도 로직 (3일 후)
+- 결제 실패 시 이메일 알림 (추후 구현)
+- 빌링키 삭제 실패 시 재시도 큐 (추후 구현)
+
+---
+
+## 14. 배포 전 확인사항
+
+### 개발 환경
+- [ ] 토스페이먼츠 테스트 키로 테스트 완료
+- [ ] 빌링키 발급/삭제 플로우 테스트
+- [ ] Cron Job 로컬 테스트 (수동 호출)
+
+### 배포 환경
+- [ ] 토스페이먼츠 라이브 키로 변경
+- [ ] Cron Secret Supabase Vault에 저장
+- [ ] Cron Job URL 배포 도메인으로 변경
+- [ ] 웹훅 URL HTTPS 설정
+- [ ] 토스페이먼츠 계약 완료 확인
 
 ---
 
@@ -1614,3 +1539,4 @@ src/
 | 버전 | 날짜 | 작성자 | 변경 내역 |
 |------|------|--------|----------|
 | 1.0 | 2025-10-27 | Claude Code | 초안 작성 |
+| 2.0 | 2025-10-28 | Claude Code | 구독 관리 기능 추가, 토스페이먼츠 연동 추가, 전체 구조 개선 |

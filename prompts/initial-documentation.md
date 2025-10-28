@@ -5,3 +5,6 @@
 3. database-architect 에이전트를 사용하여 /docs/database.md 경로에 데이터베이스 설계를 작성하라.
 4. database-critic 에이전트를 사용하여 /docs/database.md 경로에 있는 데이터베이스 설계를 개선하라.
 5. `/docs/userflow.md` 문서를 읽고, 여기 언급된 기능들에대해 usecase-writer 에이전트를 사용하여 유스케이스 문서를 작성하라. 이들은 모두 병렬로 실행되어야한다.
+
+이미 작성된 '/docs/' 문서와 코드를 잘 살펴보고, '/docs/' 문서 중 변경사항이 필요한 부분만 추가로 수정한다.
+다른 폴더의 문서 및 코드는 수정하지 않는다. 
