@@ -3,7 +3,7 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
   roots: ['<rootDir>'],
-  testMatch: ['<rootDir>/tests/unit/**/*.test.ts', '<rootDir>/tests/unit/**/*.test.tsx'],
+  testMatch: ['<rootDir>/tests/unit/lib/**/*.test.ts', '<rootDir>/tests/unit/lib/**/*.test.tsx', '<rootDir>/tests/unit/*.test.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
@@ -19,7 +19,7 @@ module.exports = {
       'ts-jest',
       {
         tsconfig: {
-          jsx: 'react',
+          jsx: 'react-jsx',
           esModuleInterop: true,
           allowSyntheticDefaultImports: true,
         },

@@ -242,6 +242,9 @@ describe('Clipboard Utils', () => {
           return element as any;
         });
 
+      // Mock console.error to suppress expected error messages
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
       await copyToClipboard('test');
 
       expect(createdTextarea).toBeDefined();
@@ -255,6 +258,7 @@ describe('Clipboard Utils', () => {
       });
 
       appendChildSpy.mockRestore();
+      consoleSpy.mockRestore();
     });
 
     it('should clean up textarea after copy', async () => {
@@ -294,9 +298,10 @@ describe('Clipboard Utils', () => {
       mockExecCommand.mockReturnValueOnce(true);
       let selectWasCalled = false;
 
+      const originalCreateElement = document.createElement;
       jest.spyOn(document, 'createElement').mockImplementation((tag) => {
         if (tag === 'textarea') {
-          const textarea = document.createElement('textarea');
+          const textarea = originalCreateElement.call(document, 'textarea') as HTMLTextAreaElement;
           const originalSelect = textarea.select.bind(textarea);
           textarea.select = jest.fn(() => {
             selectWasCalled = true;
@@ -304,7 +309,7 @@ describe('Clipboard Utils', () => {
           });
           return textarea as any;
         }
-        return document.createElement(tag);
+        return originalCreateElement.call(document, tag);
       });
 
       await copyToClipboard('test');
