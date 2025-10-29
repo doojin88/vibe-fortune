@@ -3,3 +3,4 @@
 테스트 코드를 작성할떄는 @docs/persona.md ,@docs/rules/tdd.md 문서를 참고한다.
 페이지별도 unit test 코드 작성 계획을 수립한다. 
 unit test 계획은 '/docs/unit-test-plan.md' 에 기록한다.
+unit test 결과는 '/docs/unit-test-results.md' 에 기록한다.
