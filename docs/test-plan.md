@@ -320,3 +320,7 @@ MVP 개발 속도에 최적화된 테스트 환경 구축을 위해 다음과 �
     *   `test.beforeEach`를 통해 각 테스트 전에 데이터를 클린업하여 테스트 간의 독립성을 보장합니다.
     *   사용자를 생성하고, 사주 테스트를 생성한 후, 사용자 테이블의 `test_count`가 비즈니스 로직에 따라 올바르게 감소했는지 검증합니다. (여기서는 백엔드 비즈니스 로직이 `test_count`를 감소시키는 트리거 또는 함수가 있다고 가정)
     *   현재 백엔드 로직이 Supabase Function으로 구현되었다면, Playwright에서 해당 Function을 직접 호출하거나, API Gateway가 있다면 그 API를 호출하여 테스트할 수 있습니다. `supabase-js` 클라이언트를 사용하는 방식은 데이터베이스 직접 상호작용에 중점을 둔 간결한 E2E 테스트 예시입니다.
+
+#### 2.3. TDD(Test-Driven Development)
+
+- 테스트 작업은 `/docs/rules/tdd.md` 참고하세요.
