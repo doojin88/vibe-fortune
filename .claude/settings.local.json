@@ -3,7 +3,9 @@
     "allow": [
       "WebSearch",
       "WebFetch(domain:ai.google.dev)",
-      "WebFetch(domain:www.npmjs.com)"
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npm install:*)",
+      "Bash(npm run test:unit:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
