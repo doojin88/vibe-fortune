@@ -5,7 +5,8 @@
       "WebFetch(domain:ai.google.dev)",
       "WebFetch(domain:www.npmjs.com)",
       "Bash(npm install:*)",
-      "Bash(npm run test:unit:*)"
+      "Bash(npm run test:unit:*)",
+      "Bash(pnpm run test:unit:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
