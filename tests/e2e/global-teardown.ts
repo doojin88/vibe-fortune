@@ -1,14 +1,8 @@
 import { FullConfig } from '@playwright/test';
-import { execSync } from 'child_process';
 
+// NOTE: 글로벌 티어다운 역시 로컬 Supabase 중지 작업을 수행하지 않습니다.
 async function globalTeardown(config: FullConfig) {
-  console.log('--- E2E Global Teardown: Stopping Supabase services ---');
-  try {
-    execSync('supabase stop', { stdio: 'inherit' });
-    console.log('--- Supabase services stopped ---');
-  } catch (error) {
-    console.error('--- Failed to stop Supabase: ---', error);
-  }
+  console.log('--- E2E Global Teardown: No-op (no local services to stop) ---');
 }
 
 export default globalTeardown;
