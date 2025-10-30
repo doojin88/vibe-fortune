@@ -12,13 +12,13 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: process.env.SUPABASE_URL,
+    baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
   },
   projects: [
     {
       name: 'supabase-e2e',
-      testMatch: /.*\.test\.ts$/,
+      testMatch: /.*\.(test|spec)\.ts$/,
       use: { ...devices['Desktop Chrome'] },
     },
   ],
